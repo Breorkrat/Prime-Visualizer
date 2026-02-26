@@ -121,9 +121,56 @@ int main ()
       centrox = screenWidth/2;
       centroy = screenHeight/2; 
     }
-    if (!PPSlock) primesPerSecond = 500.f + (2.0f / camera.zoom) * 1.0f;
+    if (!PPSlock) primesPerSecond = 500.f + (50.0f / sqrt(camera.zoom)) * 1.0f;
     //if (primesPerSecond > 10000) primesPerSecond = 10000;
     float moveSpeed = 10.0f / camera.zoom;
+
+
+    if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed; 
+    if (IsKeyDown(KEY_S)) camera.target.y += moveSpeed;
+    if (IsKeyDown(KEY_A)) camera.target.x -= moveSpeed;
+    if (IsKeyDown(KEY_D)) camera.target.x += moveSpeed;
+    if (IsKeyDown(KEY_DOWN)){
+      PPSlock = 1;
+      primesPerSecond-=10;
+    }
+    if (IsKeyDown(KEY_UP)){
+      PPSlock = 1;
+      primesPerSecond+=10;
+    }
+    // Fila de teclas para quando fps fica baixo
+    int key = GetKeyPressed();
+    while (key > 0) {
+      if (key == KEY_R) {
+        zoomLocked = 0;
+        camera.zoom = 1.0f;
+        camera.target = (Vector2){0, 0};
+      }
+      if (key == KEY_ENTER) {
+        if (!PPSlock) {
+          PPSlock = 1;
+          primesPerSecond = 0;
+        } else {
+          PPSlock = 0;
+        }
+      }
+      if (key == KEY_C) {
+        currentColorMode = (currentColorMode + 1) % MAX_COLOR_MODES;
+      }
+      if (key == KEY_P) {
+        TakeScreenshot(TextFormat("prime_spiral_%d.png", (int) visibleCount));
+      }
+      if (key == KEY_F1) showControls = showControls ? 0 : 1;
+      if (key == KEY_F2) showFPS = showFPS ? 0 : 1;
+      if (key == KEY_F3) showStats = showStats ? 0 : 1;
+      if (key == KEY_TAB) {
+        if (colorPickerVisible == 0) colorPickerVisible = 1;
+        else if (colorPickerVisible == 1) colorPickerVisible = 2;
+        else colorPickerVisible = 0;
+      }
+      key = GetKeyPressed();
+    }
+    /*
     if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed; 
     if (IsKeyDown(KEY_S)) camera.target.y += moveSpeed;
     if (IsKeyDown(KEY_A)) camera.target.x -= moveSpeed;
@@ -162,7 +209,7 @@ int main ()
       if (colorPickerVisible == 0) colorPickerVisible = 1;
       else if (colorPickerVisible == 1) colorPickerVisible = 2;
       else colorPickerVisible = 0;
-    }
+    }*/
     
 
     float mouseWheelMovement = GetMouseWheelMove();
@@ -208,7 +255,14 @@ int main ()
     // Culling de elementos fora da tela para melhorar performance enquanto visualiza
     Vector2 topLeft = GetScreenToWorld2D((Vector2){0, 0}, camera);
     Vector2 bottomRight = GetScreenToWorld2D((Vector2){screenWidth, screenHeight}, camera);
-    for (int i = 0; i < currentLimit; i++){
+
+    // LOD quando movendo camera, reduzindo lag ao mover renderizando apenas um a cada dez primos
+    char isMoving = (IsKeyDown(KEY_W) || IsKeyDown(KEY_A) || IsKeyDown(KEY_S) || IsKeyDown(KEY_D) || GetMouseWheelMove() != 0);
+    int step = 1;
+    if (isMoving && currentLimit > 100000) step = 5;
+
+    for (int i = 0; i < currentLimit; i+=step){
+      // Proporção para os degradês
       float distanceRatio = (float)primes.items[i].p/(float)primes.items[currentLimit].p;
       //Vector2 pos = primes.items[i].pos;
       Vector2 pos = {
