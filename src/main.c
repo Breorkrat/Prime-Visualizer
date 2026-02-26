@@ -28,7 +28,7 @@ by Jeffery Myers is marked with CC0 1.0. To view a copy of this license, visit h
 #define BAR_THICKNESS 1
 
 typedef struct {
-  float x, y;       // Coordenadas cartesianas calculadas
+  Vector2 pos;      // Coordenadas cartesianas calculadas
   unsigned int p;   // Primo
 } primePoint;
 
@@ -52,6 +52,11 @@ int main ()
 
 	// Utility function from resource_dir.h to find the resources folder and set it as the current working directory so we can load from it
 	SearchAndSetResourceDir("resources");
+
+  // Cria textura para renderizar em montes pela gpu
+  Image img = GenImageColor(2, 2, WHITE);
+  Texture2D dot = LoadTextureFromImage(img);
+  UnloadImage(img);
 
   unsigned long long int r = 0;
   unsigned long long int theta = 0;
@@ -109,9 +114,12 @@ int main ()
       camera.zoom = 350.0f / (float) primo;
     }
 
-    // Desenha círculos em primes
+    // Se o zoom estiver próximo, 1.0f / camera.zoom será maior que 1px, desenha ele maior
+    float dotScale = fmaxf(2.0f, 1.0f / camera.zoom);
+    // Desenha círculos
     for (int i = 0; i < primes.count; i++){
-      DrawCircle(primes.items[i].x, primes.items[i].y, 1.0f / camera.zoom, RED);
+      //DrawCircle(primes.items[i].x, primes.items[i].y, 1.0f / camera.zoom, RED);
+      DrawTextureEx(dot, primes.items[i].pos, 0.0f, dotScale, RED);
     }
 
     // Encerra modo de câmera para escrever textos
@@ -175,8 +183,9 @@ void addPrime(primeList *list, int p){
   float r = p;
   float theta = p;
 
-  list->items[list->count].x = r * cos(theta);
-  list->items[list->count].y = -r * sin(theta);
+  list->items[list->count].pos.x = r * cos(theta);
+  list->items[list->count].pos.y = -r * sin(theta);
+  list->items[list->count].p = p;
 
   list->count++;
 }
