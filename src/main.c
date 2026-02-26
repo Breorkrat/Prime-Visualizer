@@ -15,13 +15,6 @@ by Jeffery Myers is marked with CC0 1.0. To view a copy of this license, visit h
 #include <stdio.h>
 #include <stdlib.h>
 
-
-#define WIDTH 1280
-#define HEIGHT 800
-
-#define CENTROX WIDTH/2
-#define CENTROY HEIGHT/2
-
 #define TAM_BAR_X 10
 #define TAM_BAR_Y 8
 
@@ -51,10 +44,15 @@ void sieveSegment(primeList*, unsigned int*, int);
 int main ()
 {
 	// Tell the window to use vsync and work on high DPI displays
-	SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
+	SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI | FLAG_WINDOW_RESIZABLE);
+
+  int screenWidth = 1280;
+	int screenHeight = 800;
+	int centrox = screenWidth/2;
+	int centroy = screenHeight/2;
 
 	// Create the window and OpenGL context
-	InitWindow(WIDTH, HEIGHT, "Primos");
+	InitWindow(screenWidth, screenHeight, "Primos");
 
 	// Utility function from resource_dir.h to find the resources folder and set it as the current working directory so we can load from it
 	SearchAndSetResourceDir("resources");
@@ -67,15 +65,14 @@ int main ()
   unsigned long long int r = 0;
   unsigned long long int theta = 0;
 
+
   // Seta câmera da Raylib
   Camera2D camera = {0};
   camera.target = (Vector2){0, 0};
-  camera.offset = (Vector2){ CENTROX, CENTROY };
+  camera.offset = (Vector2){ centrox, centroy };
   camera.rotation = 0.0f;
   camera.zoom = 1.0f;
 
-  int centrox = CENTROX;
-  int centroy = CENTROY;
   char zoomLocked = 0;
   typedef enum {
     COLOR_CALCULATED,
@@ -84,6 +81,7 @@ int main ()
     COLOR_GRADIENT_PURPLE_TO_RED,
     COLOR_GRADIENT_TEMPERATURE,
     MAX_COLOR_MODES} ColorMode;
+
   ColorMode currentColorMode = COLOR_BREATHING;
 
   // Simula o efeito de "lentamente" renderizando primos, mesmo que eles já tenham sido calculados previamente
@@ -104,8 +102,16 @@ int main ()
 	// game loop
 	while (!WindowShouldClose())		// run the loop until the user presses ESCAPE or presses the Close button on the window
 	{
+    if (IsWindowResized()) {
+      screenWidth = GetScreenWidth();
+      screenHeight = GetScreenHeight();
+      camera.offset = (Vector2){ screenWidth / 2.0f, screenHeight / 2.0f };
+
+      centrox = screenWidth/2;
+      centroy = screenHeight/2; 
+    }
     if (!PPSlock) primesPerSecond = 500.f + (2.0f / camera.zoom) * 1.0f;
-    if (primesPerSecond > 10000) primesPerSecond = 10000;
+    //if (primesPerSecond > 10000) primesPerSecond = 10000;
     float moveSpeed = 10.0f / camera.zoom;
     if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed; 
     if (IsKeyDown(KEY_S)) camera.target.y += moveSpeed;
@@ -132,11 +138,11 @@ int main ()
     }
     if (IsKeyDown(KEY_DOWN)){
       PPSlock = 1;
-      primesPerSecond--;
+      primesPerSecond-=10;
     }
     if (IsKeyDown(KEY_UP)){
       PPSlock = 1;
-      primesPerSecond++;
+      primesPerSecond+=10;
     }
     if (IsKeyPressed(KEY_F1)) showControls = showControls ? 0 : 1;
     if (IsKeyPressed(KEY_F2)) showFPS = showFPS ? 0 : 1;
@@ -148,15 +154,9 @@ int main ()
       camera.zoom += (mouseWheelMovement * 0.1f * camera.zoom);
       //if (camera.zoom < 0.0001f) camera.zoom = 0.0001f;
     }
-
     
     // Primos revelados
     visibleCount += primesPerSecond * GetFrameTime();
-
-
-    // Gera outro primo
-    // int primo = nextPrime();
-    // addPrime(&primes, primo);
 
     // Se o zoom estiver próximo, 1.0f / camera.zoom será menor que 2px, então usa uma escala constante de 2 para fazer o pixel maior de perto
     float dotScale = fmaxf(2.0f, 1.0f / camera.zoom);
@@ -181,7 +181,7 @@ int main ()
 		ClearBackground(BLACK);
 
     // Usado para esquilibrar cor gradient
-    Color colorHOT = (Color){255, 60, 0, 255};
+    Color colorHOT = (Color){255, 60, 0, 125};
     Color colorCOLD = (Color){0, 150, 255, 255};
 
     // Começa modo 2d para desenhar círculos
@@ -190,7 +190,7 @@ int main ()
     // Desenha círculos
     // Culling de elementos fora da tela para melhorar performance enquanto visualiza
     Vector2 topLeft = GetScreenToWorld2D((Vector2){0, 0}, camera);
-    Vector2 bottomRight = GetScreenToWorld2D((Vector2){WIDTH, HEIGHT}, camera);
+    Vector2 bottomRight = GetScreenToWorld2D((Vector2){screenWidth, screenHeight}, camera);
     for (int i = 0; i < currentLimit; i++){
       float distanceRatio = (float)primes.items[i].p/(float)primes.items[currentLimit].p;
       //Vector2 pos = primes.items[i].pos;
@@ -240,21 +240,21 @@ int main ()
 
     // Escreve os controles na tela
     if (showControls){
-    DrawText("Use o scroll para ajustar o zoom", 10, HEIGHT-30, 20, WHITE);
-    DrawText("WASD para ajustar a câmera", 10, HEIGHT-50, 20, WHITE);
-    DrawText("R para resetar a câmera", 10, HEIGHT-70, 20, WHITE);
-    DrawText("Enter para pausar", 10, HEIGHT-90, 20, WHITE);
-    DrawText("C para mudar esquema de cores", 10, HEIGHT-110, 20, WHITE);
-    DrawText("Use as setas para cima e para baixo para alterar PPS", 10, HEIGHT-130, 20, WHITE);
-    DrawText("P para tirar print", 10, HEIGHT-150, 20, WHITE);
-    DrawText("F1, F2, F3 para esconder os menus", 10, HEIGHT-170, 20, WHITE);
+    DrawText("Use o scroll para ajustar o zoom", 10, screenHeight-30, 20, WHITE);
+    DrawText("WASD para ajustar a câmera", 10, screenHeight-50, 20, WHITE);
+    DrawText("R para resetar a câmera", 10, screenHeight-70, 20, WHITE);
+    DrawText("Enter para pausar", 10, screenHeight-90, 20, WHITE);
+    DrawText("C para mudar esquema de cores", 10, screenHeight-110, 20, WHITE);
+    DrawText("Use as setas para cima e para baixo para alterar PPS", 10, screenHeight-130, 20, WHITE);
+    DrawText("P para tirar print", 10, screenHeight-150, 20, WHITE);
+    DrawText("F1, F2, F3 para esconder os menus", 10, screenHeight-170, 20, WHITE);
     }
 
-    if (showFPS) DrawFPS(WIDTH - 100, 10);
+    if (showFPS) DrawFPS(screenWidth - 100, 10);
 
     // Desenha cursor no centro da tela
-    DrawRectangle(CENTROX-(TAM_BAR_X/2), CENTROY, TAM_BAR_X, BAR_THICKNESS, WHITE);
-    DrawRectangle(CENTROX, CENTROY-(TAM_BAR_Y/2), BAR_THICKNESS, TAM_BAR_Y, WHITE);
+    DrawRectangle(centrox-(TAM_BAR_X/2), centroy, TAM_BAR_X, BAR_THICKNESS, WHITE);
+    DrawRectangle(centrox, centroy-(TAM_BAR_Y/2), BAR_THICKNESS, TAM_BAR_Y, WHITE);
 
 		// end the frame and get ready for the next one  (display frame, poll input, etc...)
 		EndDrawing();
