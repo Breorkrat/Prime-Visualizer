@@ -30,6 +30,7 @@ by Jeffery Myers is marked with CC0 1.0. To view a copy of this license, visit h
 typedef struct {
   Vector2 pos;      // Coordenadas cartesianas calculadas
   unsigned int p;   // Primo
+  Color color;
 } primePoint;
 
 // Array dinâmico para remover o hard limit
@@ -40,7 +41,7 @@ typedef struct {
 } primeList;
 
 void addPrime(primeList*, int);
-int nextPrime();
+void sieveSegment(primeList*, unsigned int*, int);
 
 int main ()
 {
@@ -71,13 +72,29 @@ int main ()
   int centrox = CENTROX;
   int centroy = CENTROY;
   char zoomLocked = 0;
+  typedef enum {COLOR_CALCULATED, COLOR_BREATHING, COLOR_RED, MAX_COLOR_MODES} ColorMode;
+  ColorMode currentColorMode = COLOR_BREATHING;
+
+  // Simula o efeito de "lentamente" renderizando primos, mesmo que eles já tenham sido calculados previamente
+  float visibleCount = 0;
+  char PPSlock = 0;
+  float primesPerSecond = 0;
+  char showStats = 1;
+  char showControls = 1;
+  char showFPS = 1;
+
 
   // Inicializa lista de primos
   primeList primes = {0};
+  addPrime(&primes, 2);
+  unsigned int lastChecked = 0;
+  sieveSegment(&primes, &lastChecked, 1000);
 	
 	// game loop
 	while (!WindowShouldClose())		// run the loop until the user presses ESCAPE or presses the Close button on the window
 	{
+    if (!PPSlock) primesPerSecond = 500.f + (2.0f / camera.zoom) * 1.0f;
+    if (primesPerSecond > 10000) primesPerSecond = 10000;
     float moveSpeed = 10.0f / camera.zoom;
     if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed; 
     if (IsKeyDown(KEY_S)) camera.target.y += moveSpeed;
@@ -88,12 +105,62 @@ int main ()
       camera.zoom = 1.0f;
       camera.target = (Vector2){0, 0};
     }
+    if (IsKeyPressed(KEY_ENTER)) {
+      if (!PPSlock) {
+        PPSlock = 1;
+        primesPerSecond = 0;
+      } else {
+        PPSlock = 0;
+      }
+    }
+    if (IsKeyPressed(KEY_C)) {
+      currentColorMode = (currentColorMode + 1) % MAX_COLOR_MODES;
+    }
+    if (IsKeyPressed(KEY_P)) {
+      TakeScreenshot(TextFormat("prime_spiral_%d.png", (int) visibleCount));
+    }
+    if (IsKeyDown(KEY_DOWN)){
+      PPSlock = 1;
+      primesPerSecond--;
+    }
+    if (IsKeyDown(KEY_UP)){
+      PPSlock = 1;
+      primesPerSecond++;
+    }
+    if (IsKeyPressed(KEY_F1)) showControls = showControls ? 0 : 1;
+    if (IsKeyPressed(KEY_F2)) showStats = showStats ? 0 : 1;
+    if (IsKeyPressed(KEY_F3)) showStats = showStats ? 0 : 1;
 
     float mouseWheelMovement = GetMouseWheelMove();
     if (mouseWheelMovement != 0) {
       zoomLocked = 1;
       camera.zoom += (mouseWheelMovement * 0.1f * camera.zoom);
       if (camera.zoom < 0.0001f) camera.zoom = 0.0001f;
+    }
+
+    
+    // Primos revelados
+    visibleCount += primesPerSecond * GetFrameTime();
+
+
+    // Gera outro primo
+    // int primo = nextPrime();
+    // addPrime(&primes, primo);
+
+    // Se o zoom estiver próximo, 1.0f / camera.zoom será menor que 2px, então usa uma escala constante de 2 para fazer o pixel maior de perto
+    float dotScale = fmaxf(2.0f, 1.0f / camera.zoom);
+
+    // Limita para desenhar apenas alguns circulos por segundo
+    if (visibleCount < 0) visibleCount = 0;
+    int currentLimit = (int) visibleCount;
+    if (currentLimit > primes.count) currentLimit = primes.count;
+
+    // Se os primos já processados estão acabando, processa mais
+    if (primes.count - currentLimit <= 1000) sieveSegment(&primes, &lastChecked, 100000);
+
+    // Zoom automático
+    if (!zoomLocked) {
+      camera.zoom = 100.0f / ((float) currentLimit*3);
     }
 
     // Drawing
@@ -105,35 +172,57 @@ int main ()
     // Começa modo 2d para desenhar círculos
     BeginMode2D(camera);
 
-    // Gera outro primo
-    int primo = nextPrime();
-    addPrime(&primes, primo);
-
-    // Zoom automático
-    if (!zoomLocked) {
-      camera.zoom = 350.0f / (float) primo;
-    }
-
-    // Se o zoom estiver próximo, 1.0f / camera.zoom será maior que 1px, desenha ele maior
-    float dotScale = fmaxf(2.0f, 1.0f / camera.zoom);
     // Desenha círculos
-    for (int i = 0; i < primes.count; i++){
-      //DrawCircle(primes.items[i].x, primes.items[i].y, 1.0f / camera.zoom, RED);
-      DrawTextureEx(dot, primes.items[i].pos, 0.0f, dotScale, RED);
+    // Culling de elementos fora da tela para melhorar performance enquanto visualiza
+    Vector2 topLeft = GetScreenToWorld2D((Vector2){0, 0}, camera);
+    Vector2 bottomRight = GetScreenToWorld2D((Vector2){WIDTH, HEIGHT}, camera);
+    for (int i = 0; i < currentLimit; i++){
+      Vector2 pos = primes.items[i].pos;
+
+       // Não desenha se o ponto está fora da área visível
+       if (pos.x < topLeft.x || pos.x > bottomRight.x ||
+           pos.y < topLeft.y || pos.y > bottomRight.y)
+              continue;
+
+      // Define como colorir os círculos
+      Color drawColor;
+
+      switch (currentColorMode) {
+      case COLOR_RED:
+        drawColor = RED;
+        break;
+      case COLOR_CALCULATED:
+        drawColor = primes.items[i].color;
+        break;
+      case COLOR_BREATHING:
+        drawColor = ColorFromHSV(fmodf(GetTime() * 50.0f, 360.0f), 0.7f, 1.0f);
+      }
+      DrawTextureEx(dot, primes.items[i].pos, 0.0f, dotScale, drawColor);
     }
 
     // Encerra modo de câmera para escrever textos
     EndMode2D();
     
-    // Escreve instruções na tela
-    DrawText(TextFormat("Primos: %d", primes.count), 10, 10, 20, WHITE);
-    DrawText(TextFormat("Primo atual: %d", primo), 10, 30, 20, WHITE);
-    DrawText("Use o scroll para ajustar o zoom", 10, 50, 20, WHITE);
-    DrawText("WASD para ajustar a câmera", 10, 70, 20, WHITE);
-    DrawText("Aperte R para resetar a câmera", 10, 90, 20, WHITE);
+    // Escreve estatísticas  na tela
+    if (showStats) {
+    DrawText(TextFormat("Primos: %d", currentLimit), 10, 10, 20, WHITE);
+    DrawText(TextFormat("Primo atual: %d", primes.items[currentLimit].p), 10, 30, 20, WHITE);
+    DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
+    DrawText(TextFormat("Primos calculados: %d", primes.count), 10, 70, 20, WHITE);
+    }
 
-    DrawText(TextFormat("Zoom: %.4f", camera.zoom), 10, 110, 20, WHITE);
-    DrawFPS(WIDTH - 100, 10);
+    // Escreve os controles na tela
+    if (showControls){
+    DrawText("Use o scroll para ajustar o zoom", 10, HEIGHT-30, 20, WHITE);
+    DrawText("WASD para ajustar a câmera", 10, HEIGHT-50, 20, WHITE);
+    DrawText("R para resetar a câmera", 10, HEIGHT-70, 20, WHITE);
+    DrawText("Enter para pausar", 10, HEIGHT-90, 20, WHITE);
+    DrawText("C para mudar esquema de cores", 10, HEIGHT-110, 20, WHITE);
+    DrawText("Use as setas para cima e para baixo para alterar PPS", 10, HEIGHT-130, 20, WHITE);
+    DrawText("F1, F2, F3 para esconder os menus", 10, HEIGHT-150, 20, WHITE);
+    }
+
+    if (showFPS) DrawFPS(WIDTH - 100, 10);
 
     // Desenha cursor no centro da tela
     DrawRectangle(CENTROX-(TAM_BAR_X/2), CENTROY, TAM_BAR_X, BAR_THICKNESS, WHITE);
@@ -149,28 +238,55 @@ int main ()
 }
 
 
-int nextPrime(){
-  static int prime = 1;
-  int test = prime;
+void sieveSegment(primeList *list, unsigned int *lastChecked, int segmentSize){
+  // Limite inferior
+  unsigned int low = *lastChecked + 1;
+  // Limite superior
+  unsigned int high = low + segmentSize - 1;
 
-  // Testa números até achar outro primo
-  while (true) {
-    test++;
-    int isPrime = 1;
-    int raiz = ceil(sqrt(test));
+  // Cria um array de números para checagem e marca os que não são primos
+  // 0 = primo, 1 = não primo
+  char *isNotPrime = calloc(segmentSize, sizeof(char));
 
-    for (int divisor = 2; divisor <= raiz; divisor++){
-      if (test % divisor == 0 && test != divisor) {
-        isPrime = 0;
-        break;
-      }
-    }
+  // Se na primeira iteração, não usa lista conhecida para encontrar primos
+  if (low == 1) {
+    // Marca 1 como não primo
+    isNotPrime[0] = 1;
 
-    if (isPrime) {
-      prime = test;
-      return prime;
+    for (unsigned int p = 2; p*p <= high; p++) {
+      // Se o número é primo, elimina seus múltiplos
+      if (!isNotPrime[p - low]) 
+        for (unsigned int j = p*p; j <= high; j += p)
+         isNotPrime[j - low] = 1;
+      
     }
   }
+
+  // Itera pelos primos já calculados para "peneirar" a próxima demanda
+  for (int i = 0; i < list->count; i++){
+    unsigned int p = list->items[i].p;
+    if (p*p > high) break;
+
+    // Encontra o primeiro múltiplo de p no range (low, high) truncando a divisão
+    unsigned int start = (low / p) * p;
+    if (start < low) start += p;
+
+    // Números menores que p*p já devem ter sido eliminados pelas iterações passadas
+    if (start < p*p) start = p*p;
+    
+    for (unsigned int j = start; j <= high; j+=p) {
+      // Ajusta posição pro array atual
+      isNotPrime[j - low] = 1;
+    }
+  }
+
+  // Adiciona os que não foram marcados à lista de primos
+  for (unsigned int i = 0; i < segmentSize; i++) {
+    if (!isNotPrime[i]) addPrime(list, i + low);
+  }
+
+  *lastChecked = high;
+  free(isNotPrime);
 }
 
 void addPrime(primeList *list, int p){
@@ -186,6 +302,9 @@ void addPrime(primeList *list, int p){
   list->items[list->count].pos.x = r * cos(theta);
   list->items[list->count].pos.y = -r * sin(theta);
   list->items[list->count].p = p;
+
+  float hue = fmodf(list->items[list->count].p * 0.05f, 360.0f);
+  list->items[list->count].color = ColorFromHSV(hue, 0.8f, 1.0f);
 
   list->count++;
 }
