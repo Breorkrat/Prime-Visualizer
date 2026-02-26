@@ -1,13 +1,7 @@
-/*
-Raylib example file.
-This is an example main file for a simple raylib project.
-Use this as a starting point or replace it with your code.
-
-by Jeffery Myers is marked with CC0 1.0. To view a copy of this license, visit https://creativecommons.org/publicdomain/zero/1.0/
-
-*/
-
 #include "raylib.h"
+
+#define RAYGUI_IMPLEMENTATION
+#include "raygui.h"
 
 #include "resource_dir.h"	// utility header for SearchAndSetResourceDir
 
@@ -77,10 +71,20 @@ int main ()
   typedef enum {
     COLOR_CALCULATED,
     COLOR_BREATHING,
-    COLOR_RED,
+    COLOR_CUSTOM_STATIC,
+    COLOR_CUSTOM_GRADIENT,
     COLOR_GRADIENT_PURPLE_TO_RED,
     COLOR_GRADIENT_TEMPERATURE,
     MAX_COLOR_MODES} ColorMode;
+
+  char *colorSchemeName[] = {
+    "Distância",
+    "Breathing",
+    "Custom sólido",
+    "Custom Degradê",
+    "Roxo para Vermelho",
+    "Temperatura"
+  };
 
   ColorMode currentColorMode = COLOR_BREATHING;
 
@@ -91,6 +95,13 @@ int main ()
   char showStats = 1;
   char showControls = 1;
   char showFPS = 1;
+
+  // 0 = Invisível. 1 = Solid color. 2 = Gradient color
+  char colorPickerVisible = 0;
+
+  Color customColor = RED;
+  Color colorCustom1 = WHITE;
+  Color colorCustom2 = BLACK;
 
 
   // Inicializa lista de primos
@@ -147,6 +158,12 @@ int main ()
     if (IsKeyPressed(KEY_F1)) showControls = showControls ? 0 : 1;
     if (IsKeyPressed(KEY_F2)) showFPS = showFPS ? 0 : 1;
     if (IsKeyPressed(KEY_F3)) showStats = showStats ? 0 : 1;
+    if (IsKeyPressed(KEY_TAB)) {
+      if (colorPickerVisible == 0) colorPickerVisible = 1;
+      else if (colorPickerVisible == 1) colorPickerVisible = 2;
+      else colorPickerVisible = 0;
+    }
+    
 
     float mouseWheelMovement = GetMouseWheelMove();
     if (mouseWheelMovement != 0) {
@@ -208,8 +225,11 @@ int main ()
       Color drawColor;
 
       switch (currentColorMode) {
-      case COLOR_RED:
-        drawColor = RED;
+      case COLOR_CUSTOM_STATIC:
+        drawColor = customColor;
+        break;
+      case COLOR_CUSTOM_GRADIENT:
+        drawColor = ColorLerp(colorCustom1, colorCustom2, distanceRatio);
         break;
       case COLOR_CALCULATED:
         drawColor = primes.items[i].color;
@@ -229,25 +249,36 @@ int main ()
 
     // Encerra modo de câmera para escrever textos
     EndMode2D();
+
+    if (colorPickerVisible == 1) {
+      GuiColorPicker((Rectangle){ screenWidth - 250, 50, 200, 200 }, "Escolha uma cor", &customColor);
+      currentColorMode = COLOR_CUSTOM_STATIC;
+    } else if (colorPickerVisible == 2) {
+      GuiColorPicker((Rectangle){ screenWidth - 250, 50, 200, 200 }, "Escolha uma para o centro", &colorCustom1);
+      GuiColorPicker((Rectangle){ screenWidth - 250, 300, 200, 200 }, "Escolha uma para a borda", &colorCustom2);
+      currentColorMode = COLOR_CUSTOM_GRADIENT;
+    }
     
     // Escreve estatísticas  na tela
     if (showStats) {
-    DrawText(TextFormat("Primos: %d", currentLimit), 10, 10, 20, WHITE);
-    DrawText(TextFormat("Primo atual: %d", primes.items[currentLimit].p), 10, 30, 20, WHITE);
-    DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
-    DrawText(TextFormat("Primos calculados: %d", primes.count), 10, 70, 20, WHITE);
+      DrawText(TextFormat("Primos: %d", currentLimit), 10, 10, 20, WHITE);
+      DrawText(TextFormat("Primo atual: %d", primes.items[currentLimit].p), 10, 30, 20, WHITE);
+      DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
+      DrawText(TextFormat("Primos calculados: %d", primes.count), 10, 70, 20, WHITE);
+      DrawText(TextFormat("Esquema de cores atual: %s", colorSchemeName[currentColorMode]), 10, 90, 20, WHITE);
     }
 
     // Escreve os controles na tela
     if (showControls){
-    DrawText("Use o scroll para ajustar o zoom", 10, screenHeight-30, 20, WHITE);
-    DrawText("WASD para ajustar a câmera", 10, screenHeight-50, 20, WHITE);
-    DrawText("R para resetar a câmera", 10, screenHeight-70, 20, WHITE);
-    DrawText("Enter para pausar", 10, screenHeight-90, 20, WHITE);
-    DrawText("C para mudar esquema de cores", 10, screenHeight-110, 20, WHITE);
-    DrawText("Use as setas para cima e para baixo para alterar PPS", 10, screenHeight-130, 20, WHITE);
-    DrawText("P para tirar print", 10, screenHeight-150, 20, WHITE);
-    DrawText("F1, F2, F3 para esconder os menus", 10, screenHeight-170, 20, WHITE);
+      DrawText("Use o scroll para ajustar o zoom", 10, screenHeight-30, 20, WHITE);
+      DrawText("WASD para ajustar a câmera", 10, screenHeight-50, 20, WHITE);
+      DrawText("R para resetar a câmera", 10, screenHeight-70, 20, WHITE);
+      DrawText("Enter para pausar", 10, screenHeight-90, 20, WHITE);
+      DrawText("C para mudar esquema de cores", 10, screenHeight-110, 20, WHITE);
+      DrawText("TAB para escolher uma cor", 10, screenHeight-130, 20, WHITE);
+      DrawText("Use as setas para cima e para baixo para alterar PPS", 10, screenHeight-150, 20, WHITE);
+      DrawText("P para tirar print", 10, screenHeight-170, 20, WHITE);
+      DrawText("F1, F2, F3 para esconder os menus", 10, screenHeight-190, 20, WHITE);
     }
 
     if (showFPS) DrawFPS(screenWidth - 100, 10);
