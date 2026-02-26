@@ -28,7 +28,12 @@ by Jeffery Myers is marked with CC0 1.0. To view a copy of this license, visit h
 #define BAR_THICKNESS 1
 
 typedef struct {
-  Vector2 pos;      // Coordenadas cartesianas calculadas
+  double x;
+  double y;
+} doubleVector2;
+
+typedef struct {
+  doubleVector2 pos;      // Coordenadas cartesianas calculadas
   unsigned int p;   // Primo
   Color color;
 } primePoint;
@@ -72,7 +77,13 @@ int main ()
   int centrox = CENTROX;
   int centroy = CENTROY;
   char zoomLocked = 0;
-  typedef enum {COLOR_CALCULATED, COLOR_BREATHING, COLOR_RED, MAX_COLOR_MODES} ColorMode;
+  typedef enum {
+    COLOR_CALCULATED,
+    COLOR_BREATHING,
+    COLOR_RED,
+    COLOR_GRADIENT_PURPLE_TO_RED,
+    COLOR_GRADIENT_TEMPERATURE,
+    MAX_COLOR_MODES} ColorMode;
   ColorMode currentColorMode = COLOR_BREATHING;
 
   // Simula o efeito de "lentamente" renderizando primos, mesmo que eles já tenham sido calculados previamente
@@ -128,14 +139,14 @@ int main ()
       primesPerSecond++;
     }
     if (IsKeyPressed(KEY_F1)) showControls = showControls ? 0 : 1;
-    if (IsKeyPressed(KEY_F2)) showStats = showStats ? 0 : 1;
+    if (IsKeyPressed(KEY_F2)) showFPS = showFPS ? 0 : 1;
     if (IsKeyPressed(KEY_F3)) showStats = showStats ? 0 : 1;
 
     float mouseWheelMovement = GetMouseWheelMove();
     if (mouseWheelMovement != 0) {
       zoomLocked = 1;
       camera.zoom += (mouseWheelMovement * 0.1f * camera.zoom);
-      if (camera.zoom < 0.0001f) camera.zoom = 0.0001f;
+      //if (camera.zoom < 0.0001f) camera.zoom = 0.0001f;
     }
 
     
@@ -156,7 +167,7 @@ int main ()
     if (currentLimit > primes.count) currentLimit = primes.count;
 
     // Se os primos já processados estão acabando, processa mais
-    if (primes.count - currentLimit <= 1000) sieveSegment(&primes, &lastChecked, 100000);
+    if (primes.count - currentLimit <= 1000) sieveSegment(&primes, &lastChecked, 500000);
 
     // Zoom automático
     if (!zoomLocked) {
@@ -169,6 +180,10 @@ int main ()
 		// Setup the back buffer for drawing (clear color and depth buffers)
 		ClearBackground(BLACK);
 
+    // Usado para esquilibrar cor gradient
+    Color colorHOT = (Color){255, 60, 0, 255};
+    Color colorCOLD = (Color){0, 150, 255, 255};
+
     // Começa modo 2d para desenhar círculos
     BeginMode2D(camera);
 
@@ -177,7 +192,12 @@ int main ()
     Vector2 topLeft = GetScreenToWorld2D((Vector2){0, 0}, camera);
     Vector2 bottomRight = GetScreenToWorld2D((Vector2){WIDTH, HEIGHT}, camera);
     for (int i = 0; i < currentLimit; i++){
-      Vector2 pos = primes.items[i].pos;
+      float distanceRatio = (float)primes.items[i].p/(float)primes.items[currentLimit].p;
+      //Vector2 pos = primes.items[i].pos;
+      Vector2 pos = {
+        (float) primes.items[i].pos.x,
+        (float) primes.items[i].pos.y
+      };
 
        // Não desenha se o ponto está fora da área visível
        if (pos.x < topLeft.x || pos.x > bottomRight.x ||
@@ -196,8 +216,15 @@ int main ()
         break;
       case COLOR_BREATHING:
         drawColor = ColorFromHSV(fmodf(GetTime() * 50.0f, 360.0f), 0.7f, 1.0f);
+        break;
+      case COLOR_GRADIENT_PURPLE_TO_RED:
+        drawColor = ColorFromHSV(270.f + 90*distanceRatio, 0.7f, 1.0f);
+        break;
+      case COLOR_GRADIENT_TEMPERATURE:
+        drawColor = ColorLerp(colorCOLD, colorHOT, distanceRatio);
+        break;
       }
-      DrawTextureEx(dot, primes.items[i].pos, 0.0f, dotScale, drawColor);
+      DrawTextureEx(dot, pos, 0.0f, dotScale, drawColor);
     }
 
     // Encerra modo de câmera para escrever textos
@@ -219,7 +246,8 @@ int main ()
     DrawText("Enter para pausar", 10, HEIGHT-90, 20, WHITE);
     DrawText("C para mudar esquema de cores", 10, HEIGHT-110, 20, WHITE);
     DrawText("Use as setas para cima e para baixo para alterar PPS", 10, HEIGHT-130, 20, WHITE);
-    DrawText("F1, F2, F3 para esconder os menus", 10, HEIGHT-150, 20, WHITE);
+    DrawText("P para tirar print", 10, HEIGHT-150, 20, WHITE);
+    DrawText("F1, F2, F3 para esconder os menus", 10, HEIGHT-170, 20, WHITE);
     }
 
     if (showFPS) DrawFPS(WIDTH - 100, 10);
@@ -296,8 +324,8 @@ void addPrime(primeList *list, int p){
     list->items = realloc(list->items, list->capacity * sizeof(primePoint));
   }
 
-  float r = p;
-  float theta = p;
+  double r = (double)p;
+  double theta = (double)p;
 
   list->items[list->count].pos.x = r * cos(theta);
   list->items[list->count].pos.y = -r * sin(theta);
