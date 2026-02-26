@@ -39,11 +39,21 @@ typedef struct {
   int capacity;
 } primeList;
 
+// typedef struct square {
+//   float x;
+//   float y;
+//   unsigned long long int r;
+//   float theta;
+// } square;
+
+void cartesian(int*, int*, float, float);
+void draw(float, float, float, int, int, int);
 void addPrime(primeList*, int);
 int nextPrime();
 
 int main ()
 {
+
 	// Tell the window to use vsync and work on high DPI displays
 	SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
 
@@ -63,83 +73,134 @@ int main ()
   camera.rotation = 0.0f;
   camera.zoom = 1.0f;
 
+
   int centrox = CENTROX;
   int centroy = CENTROY;
-  char zoomLocked = 0;
 
   // Inicializa lista de primos
   primeList primes = {0};
+
+  // Encontra primeiros capacity_NUMS primos
 	
 	// game loop
 	while (!WindowShouldClose())		// run the loop until the user presses ESCAPE or presses the Close button on the window
 	{
-    float moveSpeed = 10.0f / camera.zoom;
-    if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed; 
-    if (IsKeyDown(KEY_S)) camera.target.y += moveSpeed;
-    if (IsKeyDown(KEY_A)) camera.target.x -= moveSpeed;
-    if (IsKeyDown(KEY_D)) camera.target.x += moveSpeed;
+    if (IsKeyDown(KEY_D)) centrox-=5;
+    if (IsKeyDown(KEY_A)) centrox+=5;
+    if (IsKeyDown(KEY_W)) centroy+=5; 
+    if (IsKeyDown(KEY_S)) centroy-=5;
     if (IsKeyPressed(KEY_R)) {
       zoomLocked = 0;
-      camera.zoom = 1.0f;
-      camera.target = (Vector2){0, 0};
+      centrox = CENTROX;
+      centroy = CENTROY;
     }
 
     float mouseWheelMovement = GetMouseWheelMove();
     if (mouseWheelMovement != 0) {
       zoomLocked = 1;
-      camera.zoom += (mouseWheelMovement * 0.1f * camera.zoom);
-      if (camera.zoom < 0.0001f) camera.zoom = 0.0001f;
+      zoomout -= mouseWheelMovement;
+      if (zoomout <= 0) zoomout = 1;
     }
 
-    // Drawing
+		// drawinghttps://www.google.com/search?q=gh+cli+to+create+project+of+current+code&sourceid=chrome&ie=UTF-8
 		BeginDrawing();
 
 		// Setup the back buffer for drawing (clear color and depth buffers)
 		ClearBackground(BLACK);
 
-    // Começa modo 2d para desenhar círculos
-    BeginMode2D(camera);
 
     // Gera outro primo
     int primo = nextPrime();
     addPrime(&primes, primo);
 
-    // Zoom automático
-    if (!zoomLocked) {
-      camera.zoom = 350.0f / (float) primo;
-    }
-
-    // Desenha círculos em primes
-    for (int i = 0; i < primes.count; i++){
-      DrawCircle(primes.items[i].x, primes.items[i].y, 1.0f / camera.zoom, RED);
-    }
-
-    // Encerra modo de câmera para escrever textos
-    EndMode2D();
+    // Calcula zoom
+    if (!zoomLocked) zoomout = primes.items[primes.count].p/350;
     
     // Escreve instruções na tela
-    DrawText(TextFormat("Primos: %d", primes.count), 10, 10, 20, WHITE);
-    DrawText(TextFormat("Primo atual: %d", primo), 10, 30, 20, WHITE);
-    DrawText("Use o scroll para ajustar o zoom", 10, 50, 20, WHITE);
-    DrawText("WASD para ajustar a câmera", 10, 70, 20, WHITE);
-    DrawText("Aperte R para resetar a câmera", 10, 90, 20, WHITE);
+    char temp[50];
+    sprintf(temp, "Primos calculados: %d", primes.count);
+    DrawText(temp, 10, 10, 20, WHITE);
+    
+    sprintf(temp, "Primo atual: %d", primes.items[primes.count-1].p);
+    DrawText(temp, 10, 30, 20, WHITE);
 
-    DrawText(TextFormat("Zoom: %.4f", camera.zoom), 10, 110, 20, WHITE);
-    DrawFPS(WIDTH - 100, 10);
+    sprintf(temp, "Use o scroll para ajustar o zoom");
+    DrawText(temp, 10, 50, 20, WHITE);
+
+    sprintf(temp, "WASD para ajustar a câmera");
+    DrawText(temp, 10, 70, 20, WHITE);
+
+    sprintf(temp, "Aperte R para resetar a câmera");
+    DrawText(temp, 10, 90, 20, WHITE);
+
+    if (zoomout <= 0) zoomout = 1;
+    int pointsize = 1/(zoomout/12);
+    if (pointsize < 1) pointsize = 1;
+
+    for (int i = 0; i < primes.count; i++){
+      DrawCircle(primes.items[i].x + centrox, primes.items[i].y + centroy, pointsize, RED);
+    }
+
+
+    // for (int i = 0; i < quantPrimos; i++){
+    //   draw(Numeros[i].r, Numeros[i].theta, zoomout, quantPrimos, centrox, centroy);
+    // }
+
+
 
     // Desenha cursor no centro da tela
     DrawRectangle(CENTROX-(TAM_BAR_X/2), CENTROY, TAM_BAR_X, BAR_THICKNESS, WHITE);
     DrawRectangle(CENTROX, CENTROY-(TAM_BAR_Y/2), BAR_THICKNESS, TAM_BAR_Y, WHITE);
 
+
+
 		// end the frame and get ready for the next one  (display frame, poll input, etc...)
 		EndDrawing();
 	}
+
+	// cleanup
+	// unload our texture so it can be cleaned up
+	// UnloadTexture(wabbit);
 
 	// destroy the window and cleanup the OpenGL context
 	CloseWindow();
 	return 0;
 }
 
+void draw(float r, float theta, float zoomout, int quantPrimos, int centrox, int centroy){
+  int x = 0;
+  int y = 0;
+
+  char temp[50];
+  sprintf(temp, "Primos calculados: %d", quantPrimos);
+  DrawText(temp, 10, 10, 20, WHITE);
+  
+  sprintf(temp, "Primo atual: %d", r);
+  DrawText(temp, 10, 30, 20, WHITE);
+
+  sprintf(temp, "Use o scroll para ajustar o zoom", r);
+  DrawText(temp, 10, 50, 20, WHITE);
+
+  sprintf(temp, "WASD para ajustar a câmera", r);
+  DrawText(temp, 10, 70, 20, WHITE);
+
+  sprintf(temp, "Aperte R para resetar a câmera", r);
+  DrawText(temp, 10, 90, 20, WHITE);
+
+  if (zoomout <= 0) zoomout = 1;
+
+  cartesian(&x, &y, r/zoomout, theta);
+
+  int pointsize = 1/(zoomout/12);
+  if (pointsize < 1) pointsize = 1;
+  DrawCircle(x+centrox, y+centroy, pointsize, RED);
+}
+
+void cartesian(int* x, int* y, float r, float theta){
+  *x = r * cos(theta);
+  *y = -r * sin(theta);
+  return;
+}
 
 int nextPrime(){
   static int prime = 1;

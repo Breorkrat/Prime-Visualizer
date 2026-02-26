@@ -20,7 +20,8 @@ obj/x64/Debug/Primos/main.o: ../../src/main.c /usr/include/stdc-predef.h \
  /usr/include/bits/types/__mbstate_t.h \
  /usr/include/bits/types/__fpos64_t.h /usr/include/bits/types/__FILE.h \
  /usr/include/bits/types/FILE.h /usr/include/bits/types/struct_FILE.h \
- /usr/include/bits/stdio_lim.h
+ /usr/include/bits/stdio_lim.h /usr/include/stdlib.h \
+ /usr/include/bits/stdlib-float.h
 /usr/include/stdc-predef.h:
 ../external/raylib-master/src/raylib.h:
 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/stdarg.h:
@@ -58,3 +59,5 @@ obj/x64/Debug/Primos/main.o: ../../src/main.c /usr/include/stdc-predef.h \
 /usr/include/bits/types/FILE.h:
 /usr/include/bits/types/struct_FILE.h:
 /usr/include/bits/stdio_lim.h:
+/usr/include/stdlib.h:
+/usr/include/bits/stdlib-float.h:
