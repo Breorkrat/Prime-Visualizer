@@ -64,6 +64,8 @@ void addPrime(PrimeList*, int);
 void sieveSegment(PrimeList*, unsigned int*, int);
 int findStartIndexForCulling(Window, PrimeList*, float, int);
 Color processColorMode(ColorMode, PrimePoint, ColorList, float, Color);
+void changeMode(int, PrimeList*, int*, int*);
+void genSegment(PrimeList*, unsigned int*, int, int);
 
 int main (){
 	// Tell the window to use vsync and work on high DPI displays
@@ -104,7 +106,8 @@ int main (){
   camera.rotation = 0.0f;
   camera.zoom = 1.0f;
 
-  char zoomLocked = 0;
+  // 0: Cover screen. 1: See full spiral. 2: Free camera
+  char zoomMode = 0;
 
   char *colorSchemeName[] = {
     "Distância",
@@ -118,12 +121,15 @@ int main (){
   ColorMode currentColorMode = COLOR_BREATHING;
 
   // Simula o efeito de "lentamente" renderizando primos, mesmo que eles já tenham sido calculados previamente
-  float visibleCount = 0;
+  int currentLimit = 0;
   char PPSlock = 0;
   float primesPerSecond = 0;
   char showStats = 1;
   char showControls = 1;
   char showFPS = 1;
+
+  // What multiples will be drawn. 0 = primes, any number is valid
+  unsigned int divMode = 0;
 
   // 0 = Invisível. 1 = Solid color. 2 = Gradient color
   char colorPickerVisible = 0;
@@ -167,8 +173,11 @@ int main (){
     int key = GetKeyPressed();
     while (key > 0) {
       if (key == KEY_R) {
-        zoomLocked = 0;
-        camera.zoom = 1.0f;
+        zoomMode = 0;
+        camera.target = (Vector2){0, 0};
+      }
+      if (key == KEY_F) {
+        zoomMode = 1;
         camera.target = (Vector2){0, 0};
       }
       if (key == KEY_ENTER) {
@@ -183,7 +192,7 @@ int main (){
         currentColorMode = (currentColorMode + 1) % MAX_COLOR_MODES;
       }
       if (key == KEY_P) {
-        TakeScreenshot(TextFormat("prime_spiral_%d.png", (int) visibleCount));
+        TakeScreenshot(TextFormat("prime_spiral_%d.png", (int) currentLimit));
       }
       if (key == KEY_F1) showControls = showControls ? 0 : 1;
       if (key == KEY_F2) showFPS = showFPS ? 0 : 1;
@@ -193,32 +202,52 @@ int main (){
         else if (colorPickerVisible == 1) colorPickerVisible = 2;
         else colorPickerVisible = 0;
       }
+      if (key == KEY_RIGHT) {
+        divMode++;
+        changeMode(divMode, &primes, &currentLimit, &lastChecked);
+      }
+      if (key == KEY_LEFT && divMode > 0) {
+        divMode--;
+        changeMode(divMode, &primes, &currentLimit, &lastChecked);
+      }
+
       key = GetKeyPressed();
     }
 
     float mouseWheelMovement = GetMouseWheelMove();
     if (mouseWheelMovement != 0) {
-      zoomLocked = 1;
+      zoomMode = 2;
       camera.zoom += (mouseWheelMovement * 0.1f * camera.zoom);
     }
     
     // Primos revelados
-    visibleCount += primesPerSecond * GetFrameTime();
+    currentLimit += primesPerSecond * GetFrameTime();
 
     // Se o zoom estiver próximo, 1.0f / camera.zoom será menor que 2px, então usa uma escala constante de 2 para fazer o pixel maior de perto
     float dotScale = fmaxf(2.0f, 1.0f / camera.zoom);
 
     // Limita para desenhar apenas alguns circulos por segundo
-    if (visibleCount < 0) visibleCount = 0;
-    int currentLimit = (int) visibleCount;
+    if (currentLimit < 0) currentLimit = 0;
     if (currentLimit > primes.count) currentLimit = primes.count;
 
     // Se os primos já processados estão acabando, processa mais
-    if (primes.count - currentLimit <= 1000) sieveSegment(&primes, &lastChecked, 500000);
+    if (primes.count - currentLimit <= 1000) {
+      if (divMode == 0) sieveSegment(&primes, &lastChecked, 500000);
+      else genSegment(&primes, &lastChecked, divMode, 100000);
+    }
+
 
     // Zoom automático
-    if (!zoomLocked) {
-      camera.zoom = 100.0f / ((float) currentLimit*3);
+    if (currentLimit > 0) {
+      float maxRadius = (float)primes.items[currentLimit - 1].p;
+      switch(zoomMode) {
+        case 0:
+          camera.zoom = (window.width / 2.0f) / (maxRadius * 0.9f);
+          break;
+        case 1:
+          camera.zoom = (window.height / 2.0f) / (maxRadius * 1.1f);
+          break;
+      }
     }
 
     // Drawing
@@ -302,19 +331,26 @@ int main (){
       DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
       DrawText(TextFormat("Primos calculados: %d", primes.count), 10, 70, 20, WHITE);
       DrawText(TextFormat("Esquema de cores atual: %s", colorSchemeName[currentColorMode]), 10, 90, 20, WHITE);
+      if (divMode == 0) {
+        DrawText("Exibindo números primos", 10, 110, 20, WHITE);
+      } else {
+        DrawText(TextFormat("Exibindo múltiplos de %d", divMode), 10, 110, 20, WHITE);
+      }
     }
 
     // Escreve os controles na tela
     if (showControls){
       DrawText("Use o scroll para ajustar o zoom", 10, window.height-30, 20, WHITE);
       DrawText("WASD para ajustar a câmera", 10, window.height-50, 20, WHITE);
-      DrawText("R para resetar a câmera", 10, window.height-70, 20, WHITE);
-      DrawText("Enter para pausar", 10, window.height-90, 20, WHITE);
-      DrawText("C para mudar esquema de cores", 10, window.height-110, 20, WHITE);
-      DrawText("TAB para escolher uma cor", 10, window.height-130, 20, WHITE);
-      DrawText("Use as setas para cima e para baixo para alterar PPS", 10, window.height-150, 20, WHITE);
-      DrawText("P para tirar print", 10, window.height-170, 20, WHITE);
-      DrawText("F1, F2, F3 para esconder os menus", 10, window.height-190, 20, WHITE);
+      DrawText("R para câmera automática (Preencher)", 10, window.height-70, 20, WHITE);
+      DrawText("F para câmera automática (Visão completa)", 10, window.height-90, 20, WHITE);
+      DrawText("Enter para pausar", 10, window.height-110, 20, WHITE);
+      DrawText("C para mudar esquema de cores", 10, window.height-130, 20, WHITE);
+      DrawText("TAB para escolher uma cor", 10, window.height-150, 20, WHITE);
+      DrawText("Use as setas para cima e para baixo para alterar PPS", 10, window.height-170, 20, WHITE);
+      DrawText("P para tirar print", 10, window.height-190, 20, WHITE);
+      DrawText("Setas esquerda e direita para alterar números exibidos", 10, window.height-210, 20, WHITE);
+      DrawText("F1, F2, F3 para esconder os menus", 10, window.height-230, 20, WHITE);
     }
 
     if (showFPS) DrawFPS(window.width - 100, 10);
@@ -442,5 +478,20 @@ Color processColorMode(ColorMode currentColorMode, PrimePoint currentPrime, Colo
   case COLOR_GRADIENT_TEMPERATURE:
     return ColorLerp(colors.cold, colors.hot, distanceRatio);
     break;
+  }
+}
+
+void changeMode(int mode, PrimeList* List, int* currentLimit, int* lastChecked){
+  List->count = 0;
+  List->capacity = 1024;
+  *currentLimit = 0;
+  *lastChecked = 0;
+}
+
+void genSegment(PrimeList* list, unsigned int* lastNumber, int n, int count){
+  // Gera count números múltiplos de n
+  for (int i = 0; i <= count; i++){
+    *lastNumber += n;
+    addPrime(list, *lastNumber);
   }
 }
