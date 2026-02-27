@@ -3,6 +3,8 @@
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 
+//#include "raymath.h"
+
 #include "resource_dir.h"	// utility header for SearchAndSetResourceDir
 
 #include <math.h>
@@ -34,9 +36,9 @@ typedef struct {
 
 void addPrime(primeList*, int);
 void sieveSegment(primeList*, unsigned int*, int);
+int findStartIndexForCulling(primeList*, float, int);
 
-int main ()
-{
+int main (){
 	// Tell the window to use vsync and work on high DPI displays
 	SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI | FLAG_WINDOW_RESIZABLE);
 
@@ -103,6 +105,9 @@ int main ()
   Color colorCustom1 = WHITE;
   Color colorCustom2 = BLACK;
 
+    Color colorHOT = (Color){255, 60, 0, 125};
+    Color colorCOLD = (Color){0, 150, 255, 255};
+
 
   // Inicializa lista de primos
   primeList primes = {0};
@@ -121,8 +126,8 @@ int main ()
       centrox = screenWidth/2;
       centroy = screenHeight/2; 
     }
+    // Calcula PPS baseado no zoom da câmera
     if (!PPSlock) primesPerSecond = 500.f + (50.0f / sqrt(camera.zoom)) * 1.0f;
-    //if (primesPerSecond > 10000) primesPerSecond = 10000;
     float moveSpeed = 10.0f / camera.zoom;
 
 
@@ -170,47 +175,6 @@ int main ()
       }
       key = GetKeyPressed();
     }
-    /*
-    if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed; 
-    if (IsKeyDown(KEY_S)) camera.target.y += moveSpeed;
-    if (IsKeyDown(KEY_A)) camera.target.x -= moveSpeed;
-    if (IsKeyDown(KEY_D)) camera.target.x += moveSpeed;
-    if (IsKeyPressed(KEY_R)) {
-      zoomLocked = 0;
-      camera.zoom = 1.0f;
-      camera.target = (Vector2){0, 0};
-    }
-    if (IsKeyPressed(KEY_ENTER)) {
-      if (!PPSlock) {
-        PPSlock = 1;
-        primesPerSecond = 0;
-      } else {
-        PPSlock = 0;
-      }
-    }
-    if (IsKeyPressed(KEY_C)) {
-      currentColorMode = (currentColorMode + 1) % MAX_COLOR_MODES;
-    }
-    if (IsKeyPressed(KEY_P)) {
-      TakeScreenshot(TextFormat("prime_spiral_%d.png", (int) visibleCount));
-    }
-    if (IsKeyDown(KEY_DOWN)){
-      PPSlock = 1;
-      primesPerSecond-=10;
-    }
-    if (IsKeyDown(KEY_UP)){
-      PPSlock = 1;
-      primesPerSecond+=10;
-    }
-    if (IsKeyPressed(KEY_F1)) showControls = showControls ? 0 : 1;
-    if (IsKeyPressed(KEY_F2)) showFPS = showFPS ? 0 : 1;
-    if (IsKeyPressed(KEY_F3)) showStats = showStats ? 0 : 1;
-    if (IsKeyPressed(KEY_TAB)) {
-      if (colorPickerVisible == 0) colorPickerVisible = 1;
-      else if (colorPickerVisible == 1) colorPickerVisible = 2;
-      else colorPickerVisible = 0;
-    }*/
-    
 
     float mouseWheelMovement = GetMouseWheelMove();
     if (mouseWheelMovement != 0) {
@@ -244,24 +208,44 @@ int main ()
 		// Setup the back buffer for drawing (clear color and depth buffers)
 		ClearBackground(BLACK);
 
-    // Usado para esquilibrar cor gradient
-    Color colorHOT = (Color){255, 60, 0, 125};
-    Color colorCOLD = (Color){0, 150, 255, 255};
-
     // Começa modo 2d para desenhar círculos
     BeginMode2D(camera);
-
-    // Desenha círculos
-    // Culling de elementos fora da tela para melhorar performance enquanto visualiza
-    Vector2 topLeft = GetScreenToWorld2D((Vector2){0, 0}, camera);
-    Vector2 bottomRight = GetScreenToWorld2D((Vector2){screenWidth, screenHeight}, camera);
 
     // LOD quando movendo camera, reduzindo lag ao mover renderizando apenas um a cada dez primos
     char isMoving = (IsKeyDown(KEY_W) || IsKeyDown(KEY_A) || IsKeyDown(KEY_S) || IsKeyDown(KEY_D) || GetMouseWheelMove() != 0);
     int step = 1;
     if (isMoving && currentLimit > 100000) step = 5;
 
-    for (int i = 0; i < currentLimit; i+=step){
+
+    // Culling de elementos fora da tela para melhorar performance enquanto visualiza
+    // Calcula posições dos cantos da tela
+    Vector2 tl = GetScreenToWorld2D((Vector2){0, 0}, camera);
+    Vector2 tr = GetScreenToWorld2D((Vector2){screenWidth, 0},camera);
+    Vector2 bl = GetScreenToWorld2D((Vector2){0, screenHeight},camera);
+    Vector2 br = GetScreenToWorld2D((Vector2){screenWidth, screenHeight}, camera);
+
+    float minX = fminf(fminf(tl.x, tr.x), fminf(bl.x, br.x));
+    float maxX = fmaxf(fmaxf(tl.x, tr.x), fmaxf(bl.x, br.x));
+    float minY = fminf(fminf(tl.y, tr.y), fminf(bl.y, br.y));
+    float maxY = fmaxf(fmaxf(tl.y, tr.y), fmaxf(bl.y, br.y));
+
+    // Calcula o ponto da câmera mais próximo do centro 
+    float cx = (minX > 0) ? minX : ((maxX < 0) ? maxX : 0);
+    float cy = (minY > 0) ? minY : ((maxY < 0) ? maxY : 0);
+    float rMin = sqrtf(cx*cx + cy*cy);
+
+    // Calcula o ponto da câmera mais longe do centro, comparando os quadrados e tirando a raíz do maior
+    float rMax = sqrtf(fmaxf(
+      fmaxf(tl.x*tl.x + tl.y*tl.y, tr.x*tr.x + tr.y*tr.y), 
+      fmaxf(bl.x*bl.x + bl.y*bl.y, br.x*br.x + br.y*br.y)));
+
+    // Encontra com busca binária o primeiro primo que pode aparecer na câmera
+    int startIndex = findStartIndexForCulling(&primes, rMin, currentLimit);
+
+    for (int i = startIndex; i < currentLimit; i+=step){
+      // Para o desenho se os próximos círculos estão fora da tela
+      if (primes.items[i].p > rMax) break;
+
       // Proporção para os degradês
       float distanceRatio = (float)primes.items[i].p/(float)primes.items[currentLimit].p;
       //Vector2 pos = primes.items[i].pos;
@@ -271,8 +255,8 @@ int main ()
       };
 
        // Não desenha se o ponto está fora da área visível
-       if (pos.x < topLeft.x || pos.x > bottomRight.x ||
-           pos.y < topLeft.y || pos.y > bottomRight.y)
+       if (pos.x < tl.x || pos.x > br.x ||
+           pos.y < tl.y || pos.y > br.y)
               continue;
 
       // Define como colorir os círculos
@@ -420,4 +404,24 @@ void addPrime(primeList *list, int p){
   list->items[list->count].color = ColorFromHSV(hue, 0.8f, 1.0f);
 
   list->count++;
+}
+
+// Usa busca binária para encontrar o primeiro primo que pode aparecer na câmera para Culling
+int findStartIndexForCulling(primeList* list, float rMin, int currentLimit){
+  if (currentLimit <= 0) return 0;
+  int low = 0;
+  int high = currentLimit - 1;
+  int result = 0;
+
+  while (low <= high){
+    int mid = low + (high - low) / 2;
+    // Se está dentro do alcance, pode ter um mais cedo
+    if (list->items[mid].p >= rMin){
+      result = mid;
+      high = mid-1;
+    } else {
+      low = mid + 1;
+    }
+  }
+  return result;
 }
