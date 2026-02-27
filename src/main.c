@@ -95,10 +95,6 @@ int main (){
   Texture2D dot = LoadTextureFromImage(img);
   UnloadImage(img);
 
-  unsigned long long int r = 0;
-  unsigned long long int theta = 0;
-
-
   // Seta câmera da Raylib
   Camera2D camera = {0};
   camera.target = (Vector2){0, 0};
@@ -326,10 +322,10 @@ int main (){
     // Escreve estatísticas  na tela
     if (showStats) {
       int primoAtual = !currentLimit ? 0 : primes.items[(int)currentLimit-1].p;
-      DrawText(TextFormat("Primos: %d", currentLimit), 10, 10, 20, WHITE);
-      DrawText(TextFormat("Primo atual: %d", primoAtual), 10, 30, 20, WHITE);
+      DrawText(TextFormat("Números gerados: %.0f", currentLimit), 10, 10, 20, WHITE);
+      DrawText(TextFormat("Número atual: %d", primoAtual), 10, 30, 20, WHITE);
       DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
-      DrawText(TextFormat("Primos calculados: %d", primes.count), 10, 70, 20, WHITE);
+      DrawText(TextFormat("Números calculados: %d", primes.count), 10, 70, 20, WHITE);
       DrawText(TextFormat("Esquema de cores atual: %s", colorSchemeName[currentColorMode]), 10, 90, 20, WHITE);
       if (divMode == 0) {
         DrawText("Exibindo números primos", 10, 110, 20, WHITE);
@@ -478,6 +474,7 @@ Color processColorMode(ColorMode currentColorMode, PrimePoint currentPrime, Colo
   case COLOR_GRADIENT_TEMPERATURE:
     return ColorLerp(colors.cold, colors.hot, distanceRatio);
     break;
+  default: return WHITE;
   }
 }
 
