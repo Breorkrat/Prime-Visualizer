@@ -25,30 +25,65 @@ typedef struct {
   doubleVector2 pos;      // Coordenadas cartesianas calculadas
   unsigned int p;   // Primo
   Color color;
-} primePoint;
+} PrimePoint;
 
 // Array dinâmico para remover o hard limit
 typedef struct {
-  primePoint *items;
+  PrimePoint *items;
   int count;
   int capacity;
-} primeList;
+} PrimeList;
 
-void addPrime(primeList*, int);
-void sieveSegment(primeList*, unsigned int*, int);
-int findStartIndexForCulling(primeList*, float, int);
+// Informações da janela
+typedef struct {
+  int width;
+  int height;
+  int centrox;
+  int centroy;
+  char name[30];
+} Window;
+
+typedef struct {
+  Color hot;
+  Color cold;
+  Color customStatic;
+  Color customGradientCenter;
+  Color customGradientEdge;
+} ColorList;
+
+typedef enum {
+  COLOR_CALCULATED,
+  COLOR_BREATHING,
+  COLOR_CUSTOM_STATIC,
+  COLOR_CUSTOM_GRADIENT,
+  COLOR_GRADIENT_PURPLE_TO_RED,
+  COLOR_GRADIENT_TEMPERATURE,
+  MAX_COLOR_MODES} ColorMode;
+
+void addPrime(PrimeList*, int);
+void sieveSegment(PrimeList*, unsigned int*, int);
+int findStartIndexForCulling(Window, PrimeList*, float, int);
+Color processColorMode(ColorMode, PrimePoint, ColorList, float, Color);
 
 int main (){
 	// Tell the window to use vsync and work on high DPI displays
 	SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI | FLAG_WINDOW_RESIZABLE);
 
-  int screenWidth = 1280;
-	int screenHeight = 800;
-	int centrox = screenWidth/2;
-	int centroy = screenHeight/2;
+  Window window = {1280, 800};
+  window.centrox = window.width/2;
+  window.centroy = window.height/2;
+  strcpy(window.name, "Primos");
+
+  ColorList colors = {
+    (Color) {255, 60, 0, 255},
+    (Color) {0, 150, 255, 255},
+    RED,
+    WHITE,
+    BLACK
+  };
 
 	// Create the window and OpenGL context
-	InitWindow(screenWidth, screenHeight, "Primos");
+	InitWindow(window.width, window.height, window.name);
 
 	// Utility function from resource_dir.h to find the resources folder and set it as the current working directory so we can load from it
 	SearchAndSetResourceDir("resources");
@@ -65,19 +100,11 @@ int main (){
   // Seta câmera da Raylib
   Camera2D camera = {0};
   camera.target = (Vector2){0, 0};
-  camera.offset = (Vector2){ centrox, centroy };
+  camera.offset = (Vector2){ window.centrox, window.centroy };
   camera.rotation = 0.0f;
   camera.zoom = 1.0f;
 
   char zoomLocked = 0;
-  typedef enum {
-    COLOR_CALCULATED,
-    COLOR_BREATHING,
-    COLOR_CUSTOM_STATIC,
-    COLOR_CUSTOM_GRADIENT,
-    COLOR_GRADIENT_PURPLE_TO_RED,
-    COLOR_GRADIENT_TEMPERATURE,
-    MAX_COLOR_MODES} ColorMode;
 
   char *colorSchemeName[] = {
     "Distância",
@@ -101,16 +128,8 @@ int main (){
   // 0 = Invisível. 1 = Solid color. 2 = Gradient color
   char colorPickerVisible = 0;
 
-  Color customColor = RED;
-  Color colorCustom1 = WHITE;
-  Color colorCustom2 = BLACK;
-
-    Color colorHOT = (Color){255, 60, 0, 125};
-    Color colorCOLD = (Color){0, 150, 255, 255};
-
-
   // Inicializa lista de primos
-  primeList primes = {0};
+  PrimeList primes = {0};
   addPrime(&primes, 2);
   unsigned int lastChecked = 0;
   sieveSegment(&primes, &lastChecked, 1000);
@@ -118,18 +137,19 @@ int main (){
 	// game loop
 	while (!WindowShouldClose())		// run the loop until the user presses ESCAPE or presses the Close button on the window
 	{
+    // Checa se a janela mudou de resolução para recalcular posições
     if (IsWindowResized()) {
-      screenWidth = GetScreenWidth();
-      screenHeight = GetScreenHeight();
-      camera.offset = (Vector2){ screenWidth / 2.0f, screenHeight / 2.0f };
+      window.width = GetScreenWidth();
+      window.height = GetScreenHeight();
+      camera.offset = (Vector2){ window.width / 2.0f, window.height / 2.0f };
 
-      centrox = screenWidth/2;
-      centroy = screenHeight/2; 
+      window.centrox = window.width/2;
+      window.centroy = window.height/2; 
     }
+
     // Calcula PPS baseado no zoom da câmera
     if (!PPSlock) primesPerSecond = 500.f + (50.0f / sqrt(camera.zoom)) * 1.0f;
     float moveSpeed = 10.0f / camera.zoom;
-
 
     if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed; 
     if (IsKeyDown(KEY_S)) camera.target.y += moveSpeed;
@@ -180,7 +200,6 @@ int main (){
     if (mouseWheelMovement != 0) {
       zoomLocked = 1;
       camera.zoom += (mouseWheelMovement * 0.1f * camera.zoom);
-      //if (camera.zoom < 0.0001f) camera.zoom = 0.0001f;
     }
     
     // Primos revelados
@@ -216,13 +235,11 @@ int main (){
     int step = 1;
     if (isMoving && currentLimit > 100000) step = 5;
 
-
-    // Culling de elementos fora da tela para melhorar performance enquanto visualiza
-    // Calcula posições dos cantos da tela
+    // Encontra com busca binária o primeiro primo que pode aparecer na câmera e o maior raio que a câmera vê
     Vector2 tl = GetScreenToWorld2D((Vector2){0, 0}, camera);
-    Vector2 tr = GetScreenToWorld2D((Vector2){screenWidth, 0},camera);
-    Vector2 bl = GetScreenToWorld2D((Vector2){0, screenHeight},camera);
-    Vector2 br = GetScreenToWorld2D((Vector2){screenWidth, screenHeight}, camera);
+    Vector2 tr = GetScreenToWorld2D((Vector2){window.width, 0},camera);
+    Vector2 bl = GetScreenToWorld2D((Vector2){0, window.height},camera);
+    Vector2 br = GetScreenToWorld2D((Vector2){window.width, window.height}, camera);
 
     float minX = fminf(fminf(tl.x, tr.x), fminf(bl.x, br.x));
     float maxX = fmaxf(fmaxf(tl.x, tr.x), fmaxf(bl.x, br.x));
@@ -239,49 +256,29 @@ int main (){
       fmaxf(tl.x*tl.x + tl.y*tl.y, tr.x*tr.x + tr.y*tr.y), 
       fmaxf(bl.x*bl.x + bl.y*bl.y, br.x*br.x + br.y*br.y)));
 
-    // Encontra com busca binária o primeiro primo que pode aparecer na câmera
-    int startIndex = findStartIndexForCulling(&primes, rMin, currentLimit);
+    int start = findStartIndexForCulling(window, &primes, rMin, currentLimit);
+    Color globalBreath = ColorFromHSV(fmodf(GetTime() * 50.0f, 360.0f), 0.7f, 1.0f);
 
-    for (int i = startIndex; i < currentLimit; i+=step){
-      // Para o desenho se os próximos círculos estão fora da tela
+    // Calcula o inverso do primo para acelerar cálculo de distanceRation, eliminando uma divisão por item
+    float invMaxP = (currentLimit > 0) ? 1.0f / (float)primes.items[currentLimit-1].p : 1.0f;
+
+    for (int i = start; i < currentLimit; i+=step){
+      // Para o desenho se os próximos círculos estão fora do ponto mais longe da tela
       if (primes.items[i].p > rMax) break;
 
+      // Não desenha se o ponto está fora da área visível
+      if (cx < minX || cx > maxX || cy < minY || cy > maxY) continue;
+
       // Proporção para os degradês
-      float distanceRatio = (float)primes.items[i].p/(float)primes.items[currentLimit].p;
-      //Vector2 pos = primes.items[i].pos;
+      float distanceRatio = (float)primes.items[i].p * invMaxP;
+
       Vector2 pos = {
         (float) primes.items[i].pos.x,
         (float) primes.items[i].pos.y
       };
 
-       // Não desenha se o ponto está fora da área visível
-       if (pos.x < tl.x || pos.x > br.x ||
-           pos.y < tl.y || pos.y > br.y)
-              continue;
-
       // Define como colorir os círculos
-      Color drawColor;
-
-      switch (currentColorMode) {
-      case COLOR_CUSTOM_STATIC:
-        drawColor = customColor;
-        break;
-      case COLOR_CUSTOM_GRADIENT:
-        drawColor = ColorLerp(colorCustom1, colorCustom2, distanceRatio);
-        break;
-      case COLOR_CALCULATED:
-        drawColor = primes.items[i].color;
-        break;
-      case COLOR_BREATHING:
-        drawColor = ColorFromHSV(fmodf(GetTime() * 50.0f, 360.0f), 0.7f, 1.0f);
-        break;
-      case COLOR_GRADIENT_PURPLE_TO_RED:
-        drawColor = ColorFromHSV(270.f + 90*distanceRatio, 0.7f, 1.0f);
-        break;
-      case COLOR_GRADIENT_TEMPERATURE:
-        drawColor = ColorLerp(colorCOLD, colorHOT, distanceRatio);
-        break;
-      }
+      Color drawColor = processColorMode(currentColorMode, primes.items[i], colors, distanceRatio, globalBreath);
       DrawTextureEx(dot, pos, 0.0f, dotScale, drawColor);
     }
 
@@ -289,18 +286,19 @@ int main (){
     EndMode2D();
 
     if (colorPickerVisible == 1) {
-      GuiColorPicker((Rectangle){ screenWidth - 250, 50, 200, 200 }, "Escolha uma cor", &customColor);
+      GuiColorPicker((Rectangle){ window.width - 250, 50, 200, 200 }, "Escolha uma cor", &colors.customStatic);
       currentColorMode = COLOR_CUSTOM_STATIC;
     } else if (colorPickerVisible == 2) {
-      GuiColorPicker((Rectangle){ screenWidth - 250, 50, 200, 200 }, "Escolha uma para o centro", &colorCustom1);
-      GuiColorPicker((Rectangle){ screenWidth - 250, 300, 200, 200 }, "Escolha uma para a borda", &colorCustom2);
+      GuiColorPicker((Rectangle){ window.width - 250, 50, 200, 200 }, "Escolha uma para o centro", &colors.customGradientCenter);
+      GuiColorPicker((Rectangle){ window.width - 250, 300, 200, 200 }, "Escolha uma para a borda", &colors.customGradientEdge);
       currentColorMode = COLOR_CUSTOM_GRADIENT;
     }
     
     // Escreve estatísticas  na tela
     if (showStats) {
+      int primoAtual = !currentLimit ? 0 : primes.items[currentLimit-1].p;
       DrawText(TextFormat("Primos: %d", currentLimit), 10, 10, 20, WHITE);
-      DrawText(TextFormat("Primo atual: %d", primes.items[currentLimit].p), 10, 30, 20, WHITE);
+      DrawText(TextFormat("Primo atual: %d", primoAtual), 10, 30, 20, WHITE);
       DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
       DrawText(TextFormat("Primos calculados: %d", primes.count), 10, 70, 20, WHITE);
       DrawText(TextFormat("Esquema de cores atual: %s", colorSchemeName[currentColorMode]), 10, 90, 20, WHITE);
@@ -308,22 +306,22 @@ int main (){
 
     // Escreve os controles na tela
     if (showControls){
-      DrawText("Use o scroll para ajustar o zoom", 10, screenHeight-30, 20, WHITE);
-      DrawText("WASD para ajustar a câmera", 10, screenHeight-50, 20, WHITE);
-      DrawText("R para resetar a câmera", 10, screenHeight-70, 20, WHITE);
-      DrawText("Enter para pausar", 10, screenHeight-90, 20, WHITE);
-      DrawText("C para mudar esquema de cores", 10, screenHeight-110, 20, WHITE);
-      DrawText("TAB para escolher uma cor", 10, screenHeight-130, 20, WHITE);
-      DrawText("Use as setas para cima e para baixo para alterar PPS", 10, screenHeight-150, 20, WHITE);
-      DrawText("P para tirar print", 10, screenHeight-170, 20, WHITE);
-      DrawText("F1, F2, F3 para esconder os menus", 10, screenHeight-190, 20, WHITE);
+      DrawText("Use o scroll para ajustar o zoom", 10, window.height-30, 20, WHITE);
+      DrawText("WASD para ajustar a câmera", 10, window.height-50, 20, WHITE);
+      DrawText("R para resetar a câmera", 10, window.height-70, 20, WHITE);
+      DrawText("Enter para pausar", 10, window.height-90, 20, WHITE);
+      DrawText("C para mudar esquema de cores", 10, window.height-110, 20, WHITE);
+      DrawText("TAB para escolher uma cor", 10, window.height-130, 20, WHITE);
+      DrawText("Use as setas para cima e para baixo para alterar PPS", 10, window.height-150, 20, WHITE);
+      DrawText("P para tirar print", 10, window.height-170, 20, WHITE);
+      DrawText("F1, F2, F3 para esconder os menus", 10, window.height-190, 20, WHITE);
     }
 
-    if (showFPS) DrawFPS(screenWidth - 100, 10);
+    if (showFPS) DrawFPS(window.width - 100, 10);
 
     // Desenha cursor no centro da tela
-    DrawRectangle(centrox-(TAM_BAR_X/2), centroy, TAM_BAR_X, BAR_THICKNESS, WHITE);
-    DrawRectangle(centrox, centroy-(TAM_BAR_Y/2), BAR_THICKNESS, TAM_BAR_Y, WHITE);
+    DrawRectangle(window.centrox-(TAM_BAR_X/2), window.centroy, TAM_BAR_X, BAR_THICKNESS, WHITE);
+    DrawRectangle(window.centrox, window.centroy-(TAM_BAR_Y/2), BAR_THICKNESS, TAM_BAR_Y, WHITE);
 
 		// end the frame and get ready for the next one  (display frame, poll input, etc...)
 		EndDrawing();
@@ -334,8 +332,7 @@ int main (){
 	return 0;
 }
 
-
-void sieveSegment(primeList *list, unsigned int *lastChecked, int segmentSize){
+void sieveSegment(PrimeList *list, unsigned int *lastChecked, int segmentSize){
   // Limite inferior
   unsigned int low = *lastChecked + 1;
   // Limite superior
@@ -355,7 +352,6 @@ void sieveSegment(primeList *list, unsigned int *lastChecked, int segmentSize){
       if (!isNotPrime[p - low]) 
         for (unsigned int j = p*p; j <= high; j += p)
          isNotPrime[j - low] = 1;
-      
     }
   }
 
@@ -381,16 +377,15 @@ void sieveSegment(primeList *list, unsigned int *lastChecked, int segmentSize){
   for (unsigned int i = 0; i < segmentSize; i++) {
     if (!isNotPrime[i]) addPrime(list, i + low);
   }
-
   *lastChecked = high;
   free(isNotPrime);
 }
 
-void addPrime(primeList *list, int p){
+void addPrime(PrimeList *list, int p){
   if (list->count >= list->capacity){
     // Se a lista estiver cheia, dobra a capacidade
     list->capacity = (list->capacity == 0) ? 1024 : list->capacity * 2;
-    list->items = realloc(list->items, list->capacity * sizeof(primePoint));
+    list->items = realloc(list->items, list->capacity * sizeof(PrimePoint));
   }
 
   double r = (double)p;
@@ -407,7 +402,7 @@ void addPrime(primeList *list, int p){
 }
 
 // Usa busca binária para encontrar o primeiro primo que pode aparecer na câmera para Culling
-int findStartIndexForCulling(primeList* list, float rMin, int currentLimit){
+int findStartIndexForCulling(Window window, PrimeList* list, float rMin, int currentLimit){
   if (currentLimit <= 0) return 0;
   int low = 0;
   int high = currentLimit - 1;
@@ -424,4 +419,28 @@ int findStartIndexForCulling(primeList* list, float rMin, int currentLimit){
     }
   }
   return result;
+}
+
+// Processa o modo de cor atual retornando a cor que deve ser pintada
+Color processColorMode(ColorMode currentColorMode, PrimePoint currentPrime, ColorList colors, float distanceRatio, Color globalBreath){
+  switch (currentColorMode) {
+  case COLOR_CUSTOM_STATIC:
+    return colors.customStatic;
+    break;
+  case COLOR_CUSTOM_GRADIENT:
+    return ColorLerp(colors.customGradientCenter, colors.customGradientEdge, distanceRatio);
+    break;
+  case COLOR_CALCULATED:
+    return currentPrime.color;
+    break;
+  case COLOR_BREATHING:
+    return globalBreath;
+    break;
+  case COLOR_GRADIENT_PURPLE_TO_RED:
+    return ColorFromHSV(270.f + 90*distanceRatio, 0.7f, 1.0f);
+    break;
+  case COLOR_GRADIENT_TEMPERATURE:
+    return ColorLerp(colors.cold, colors.hot, distanceRatio);
+    break;
+  }
 }
