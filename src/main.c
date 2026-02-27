@@ -64,7 +64,7 @@ void addPrime(PrimeList*, int);
 void sieveSegment(PrimeList*, unsigned int*, int);
 int findStartIndexForCulling(Window, PrimeList*, float, int);
 Color processColorMode(ColorMode, PrimePoint, ColorList, float, Color);
-void changeMode(int, PrimeList*, int*, int*);
+void changeMode(int, PrimeList*, float*, unsigned int*);
 void genSegment(PrimeList*, unsigned int*, int, int);
 
 int main (){
@@ -121,7 +121,7 @@ int main (){
   ColorMode currentColorMode = COLOR_BREATHING;
 
   // Simula o efeito de "lentamente" renderizando primos, mesmo que eles já tenham sido calculados previamente
-  int currentLimit = 0;
+  float currentLimit = 0;
   char PPSlock = 0;
   float primesPerSecond = 0;
   char showStats = 1;
@@ -239,7 +239,7 @@ int main (){
 
     // Zoom automático
     if (currentLimit > 0) {
-      float maxRadius = (float)primes.items[currentLimit - 1].p;
+      float maxRadius = (float)primes.items[(int)currentLimit - 1].p;
       switch(zoomMode) {
         case 0:
           camera.zoom = (window.width / 2.0f) / (maxRadius * 0.9f);
@@ -289,7 +289,7 @@ int main (){
     Color globalBreath = ColorFromHSV(fmodf(GetTime() * 50.0f, 360.0f), 0.7f, 1.0f);
 
     // Calcula o inverso do primo para acelerar cálculo de distanceRation, eliminando uma divisão por item
-    float invMaxP = (currentLimit > 0) ? 1.0f / (float)primes.items[currentLimit-1].p : 1.0f;
+    float invMaxP = (currentLimit > 0) ? 1.0f / (float)primes.items[(int)currentLimit-1].p : 1.0f;
 
     for (int i = start; i < currentLimit; i+=step){
       // Para o desenho se os próximos círculos estão fora do ponto mais longe da tela
@@ -325,7 +325,7 @@ int main (){
     
     // Escreve estatísticas  na tela
     if (showStats) {
-      int primoAtual = !currentLimit ? 0 : primes.items[currentLimit-1].p;
+      int primoAtual = !currentLimit ? 0 : primes.items[(int)currentLimit-1].p;
       DrawText(TextFormat("Primos: %d", currentLimit), 10, 10, 20, WHITE);
       DrawText(TextFormat("Primo atual: %d", primoAtual), 10, 30, 20, WHITE);
       DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
@@ -481,9 +481,8 @@ Color processColorMode(ColorMode currentColorMode, PrimePoint currentPrime, Colo
   }
 }
 
-void changeMode(int mode, PrimeList* List, int* currentLimit, int* lastChecked){
+void changeMode(int mode, PrimeList* List, float* currentLimit, unsigned int* lastChecked){
   List->count = 0;
-  List->capacity = 1024;
   *currentLimit = 0;
   *lastChecked = 0;
 }
