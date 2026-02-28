@@ -20,7 +20,8 @@ WEB_FLAGS = -DPLATFORM_WEB -s USE_GLFW=3 -s USE_WEBGL2=1 -s ALLOW_MEMORY_GROWTH=
 
 # Build for Linux
 all:
-	$(CC) $(SRC) -o $(PROJECT_NAME) -Os -Wall -g $(INCLUDE_PATHS) $(LIBS_LINUX)
+	# $(CC) $(SRC) -o $(PROJECT_NAME) -Os -Wall -g $(INCLUDE_PATHS) $(LIBS_LINUX)
+	$(CC) $(SRC) -o $(PROJECT_NAME) -O0 -Wall -g $(INCLUDE_PATHS) $(LIBS_LINUX)
 
 # Build for Web
 web:

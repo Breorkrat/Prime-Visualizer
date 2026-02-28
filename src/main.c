@@ -23,7 +23,7 @@ typedef struct {
 
 typedef struct {
   doubleVector2 pos;      // Coordenadas cartesianas calculadas
-  unsigned int p;   // Primo
+  unsigned long long int p;   // Primo
   Color color;
 } PrimePoint;
 
@@ -60,12 +60,12 @@ typedef enum {
   COLOR_GRADIENT_TEMPERATURE,
   MAX_COLOR_MODES} ColorMode;
 
-void addPrime(PrimeList*, int);
-void sieveSegment(PrimeList*, unsigned int*, int);
+void addPrime(PrimeList*, unsigned long long int);
+void sieveSegment(PrimeList*, unsigned long long int*, int);
 int findStartIndexForCulling(Window, PrimeList*, float, int);
 Color processColorMode(ColorMode, PrimePoint, ColorList, float, Color);
-void changeMode(int, PrimeList*, float*, unsigned int*);
-void genSegment(PrimeList*, unsigned int*, int, int);
+void changeMode(int, PrimeList*, float*, unsigned long long int*);
+void genSegment(PrimeList*, unsigned long long int*, unsigned long long int, int);
 
 int main (){
 	// Tell the window to use vsync and work on high DPI displays
@@ -104,6 +104,9 @@ int main (){
 
   // 0: Cover screen. 1: See full spiral. 2: Free camera
   char zoomMode = 0;
+  // Buffer para escrita de um número
+  char inputBuffer[16] = {0};
+  char isTyping = 0;
 
   char *colorSchemeName[] = {
     "Distância",
@@ -133,7 +136,7 @@ int main (){
   // Inicializa lista de primos
   PrimeList primes = {0};
   addPrime(&primes, 2);
-  unsigned int lastChecked = 0;
+  unsigned long long int lastChecked = 0;
   sieveSegment(&primes, &lastChecked, 1000);
 	
 	// game loop
@@ -150,7 +153,10 @@ int main (){
     }
 
     // Calcula PPS baseado no zoom da câmera
-    if (!PPSlock) primesPerSecond = 500.f + (50.0f / sqrt(camera.zoom)) * 1.0f;
+    if (!PPSlock) {
+      primesPerSecond = 500.f + (50.0f / sqrt(camera.zoom)) * 1.0f;
+      if (primesPerSecond > 30000.0f) primesPerSecond = 30000.0f;
+    } 
     float moveSpeed = 10.0f / camera.zoom;
 
     if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed; 
@@ -165,6 +171,40 @@ int main (){
       PPSlock = 1;
       primesPerSecond+=10;
     }
+    
+    int character = GetCharPressed();
+
+    // Adds key to inputBuffer and starts typing mode
+    if (character >= '0' && character <= '9'){ 
+      isTyping = 1;
+      int len = strlen(inputBuffer);
+      if (len < 15) {
+        inputBuffer[len] = (char) character;
+        inputBuffer[len+1] = '\0';
+      }
+    }
+    if (isTyping) {
+      // Se backspace, apaga última tecla
+      if (IsKeyPressed(KEY_BACKSPACE)) {
+        int len = strlen(inputBuffer);
+        if (len > 0) inputBuffer[len-1] = '\0';
+        else isTyping = false; // Se deletou tudo, sai do modo de edição
+      }
+
+      if (IsKeyPressed(KEY_ENTER)){
+        divMode = atoi(inputBuffer);
+        changeMode(divMode, &primes, &currentLimit, &lastChecked);
+        // Reseta o buffer
+        inputBuffer[0] = '\0';
+        isTyping = false;
+      }
+      // Escape para cancelar
+      if (IsKeyPressed(KEY_ESCAPE)){
+        inputBuffer[0] = '\0';
+        isTyping = false;
+      }
+    }
+
     // Fila de teclas para quando fps fica baixo
     int key = GetKeyPressed();
     while (key > 0) {
@@ -228,7 +268,7 @@ int main (){
 
     // Se os primos já processados estão acabando, processa mais
     if (primes.count - currentLimit <= 1000) {
-      if (divMode == 0) sieveSegment(&primes, &lastChecked, 500000);
+      if (divMode == 0) sieveSegment(&primes, &lastChecked, 1000000);
       else genSegment(&primes, &lastChecked, divMode, 100000);
     }
 
@@ -310,6 +350,21 @@ int main (){
     // Encerra modo de câmera para escrever textos
     EndMode2D();
 
+    if (isTyping) {
+      int boxX = window.width/2 - 150;
+      int boxY = window.height/2 - 40;
+      int boxWidth = 300;
+      int boxHeight = 80;
+      DrawRectangle(boxX, boxY, boxWidth, boxHeight, Fade(BLACK, 0.8f));
+      DrawRectangleLines(boxX, boxY, boxWidth, boxHeight, RAYWHITE);
+      DrawText("Pular para múltiplo:", boxX + 20, boxY + 10, 20, GRAY);
+      // Efeito de cursor piscando
+      const char* cursor = (fmodf(GetTime(), 1.0f) < 0.5f) ? "_" : "";
+      DrawText(TextFormat("%s%s", inputBuffer, cursor), boxX + 20, boxY + 40, 30, WHITE);
+
+      DrawText("[Enter] Confirmar [Esc] Cancelar", boxX + 20, boxY + 80, 10, GRAY);
+    }
+
     if (colorPickerVisible == 1) {
       GuiColorPicker((Rectangle){ window.width - 250, 50, 200, 200 }, "Escolha uma cor", &colors.customStatic);
       currentColorMode = COLOR_CUSTOM_STATIC;
@@ -321,9 +376,9 @@ int main (){
     
     // Escreve estatísticas  na tela
     if (showStats) {
-      int primoAtual = !currentLimit ? 0 : primes.items[(int)currentLimit-1].p;
+      unsigned long long int primoAtual = !currentLimit ? 0 : primes.items[(int)currentLimit-1].p;
       DrawText(TextFormat("Números gerados: %.0f", currentLimit), 10, 10, 20, WHITE);
-      DrawText(TextFormat("Número atual: %d", primoAtual), 10, 30, 20, WHITE);
+      DrawText(TextFormat("Número atual: %llu", primoAtual), 10, 30, 20, WHITE);
       DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
       DrawText(TextFormat("Números calculados: %d", primes.count), 10, 70, 20, WHITE);
       DrawText(TextFormat("Esquema de cores atual: %s", colorSchemeName[currentColorMode]), 10, 90, 20, WHITE);
@@ -364,11 +419,11 @@ int main (){
 	return 0;
 }
 
-void sieveSegment(PrimeList *list, unsigned int *lastChecked, int segmentSize){
+void sieveSegment(PrimeList *list, unsigned long long int *lastChecked, int segmentSize){
   // Limite inferior
-  unsigned int low = *lastChecked + 1;
+  unsigned long long int low = *lastChecked + 1;
   // Limite superior
-  unsigned int high = low + segmentSize - 1;
+  unsigned long long int high = low + segmentSize - 1;
 
   // Cria um array de números para checagem e marca os que não são primos
   // 0 = primo, 1 = não primo
@@ -379,27 +434,27 @@ void sieveSegment(PrimeList *list, unsigned int *lastChecked, int segmentSize){
     // Marca 1 como não primo
     isNotPrime[0] = 1;
 
-    for (unsigned int p = 2; p*p <= high; p++) {
+    for (unsigned long long int p = 2; p*p <= high; p++) {
       // Se o número é primo, elimina seus múltiplos
       if (!isNotPrime[p - low]) 
-        for (unsigned int j = p*p; j <= high; j += p)
+        for (unsigned long long int j = p*p; j <= high; j += p)
          isNotPrime[j - low] = 1;
     }
   }
 
   // Itera pelos primos já calculados para "peneirar" a próxima demanda
   for (int i = 0; i < list->count; i++){
-    unsigned int p = list->items[i].p;
+    unsigned long long int p = list->items[i].p;
     if (p*p > high) break;
 
     // Encontra o primeiro múltiplo de p no range (low, high) truncando a divisão
-    unsigned int start = (low / p) * p;
+    unsigned long long int start = (low / p) * p;
     if (start < low) start += p;
 
     // Números menores que p*p já devem ter sido eliminados pelas iterações passadas
     if (start < p*p) start = p*p;
     
-    for (unsigned int j = start; j <= high; j+=p) {
+    for (unsigned long long int j = start; j <= high; j+=p) {
       // Ajusta posição pro array atual
       isNotPrime[j - low] = 1;
     }
@@ -413,7 +468,7 @@ void sieveSegment(PrimeList *list, unsigned int *lastChecked, int segmentSize){
   free(isNotPrime);
 }
 
-void addPrime(PrimeList *list, int p){
+void addPrime(PrimeList *list, unsigned long long int p){
   if (list->count >= list->capacity){
     // Se a lista estiver cheia, dobra a capacidade
     list->capacity = (list->capacity == 0) ? 1024 : list->capacity * 2;
@@ -421,7 +476,8 @@ void addPrime(PrimeList *list, int p){
   }
 
   double r = (double)p;
-  double theta = (double)p;
+  // Mantem a precisão mesmo com ângulos absurdos usando o módulo
+  double theta = fmod((double)p, 2*PI);
 
   list->items[list->count].pos.x = r * cos(theta);
   list->items[list->count].pos.y = -r * sin(theta);
@@ -478,13 +534,13 @@ Color processColorMode(ColorMode currentColorMode, PrimePoint currentPrime, Colo
   }
 }
 
-void changeMode(int mode, PrimeList* List, float* currentLimit, unsigned int* lastChecked){
+void changeMode(int mode, PrimeList* List, float* currentLimit, unsigned long long int* lastChecked){
   List->count = 0;
   *currentLimit = 0;
   *lastChecked = 0;
 }
 
-void genSegment(PrimeList* list, unsigned int* lastNumber, int n, int count){
+void genSegment(PrimeList* list, unsigned long long int* lastNumber, unsigned long long int n, int count){
   // Gera count números múltiplos de n
   for (int i = 0; i <= count; i++){
     *lastNumber += n;
