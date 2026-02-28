@@ -44,8 +44,6 @@ typedef struct {
 } Window;
 
 typedef struct {
-  Color hot;
-  Color cold;
   Color customStatic;
   Color customGradientCenter;
   Color customGradientEdge;
@@ -56,8 +54,6 @@ typedef enum {
   COLOR_BREATHING,
   COLOR_CUSTOM_STATIC,
   COLOR_CUSTOM_GRADIENT,
-  COLOR_GRADIENT_PURPLE_TO_RED,
-  COLOR_GRADIENT_TEMPERATURE,
   MAX_COLOR_MODES} ColorMode;
 
 void addPrime(PrimeList*, unsigned long long int);
@@ -74,11 +70,9 @@ int main (){
   Window window = {1280, 800};
   window.centrox = window.width/2;
   window.centroy = window.height/2;
-  strcpy(window.name, "Primos");
+  strcpy(window.name, "Prime Visualizer");
 
   ColorList colors = {
-    (Color) {255, 60, 0, 255},
-    (Color) {0, 150, 255, 255},
     RED,
     WHITE,
     BLACK
@@ -109,12 +103,10 @@ int main (){
   char isTyping = 0;
 
   char *colorSchemeName[] = {
-    "Distância",
+    "Distance",
     "Breathing",
-    "Custom sólido",
-    "Custom Degradê",
-    "Roxo para Vermelho",
-    "Temperatura"
+    "Custom static",
+    "Custom Gradient"
   };
 
   ColorMode currentColorMode = COLOR_BREATHING;
@@ -126,6 +118,7 @@ int main (){
   char showStats = 1;
   char showControls = 1;
   char showFPS = 1;
+  char showCursor = 1;
 
   // What multiples will be drawn. 0 = primes, any number is valid
   unsigned int divMode = 0;
@@ -233,6 +226,7 @@ int main (){
       if (key == KEY_F1) showControls = showControls ? 0 : 1;
       if (key == KEY_F2) showFPS = showFPS ? 0 : 1;
       if (key == KEY_F3) showStats = showStats ? 0 : 1;
+      if (key == KEY_F4) showCursor = showCursor ? 0 : 1;
       if (key == KEY_TAB) {
         if (colorPickerVisible == 0) colorPickerVisible = 1;
         else if (colorPickerVisible == 1) colorPickerVisible = 2;
@@ -357,58 +351,60 @@ int main (){
       int boxHeight = 80;
       DrawRectangle(boxX, boxY, boxWidth, boxHeight, Fade(BLACK, 0.8f));
       DrawRectangleLines(boxX, boxY, boxWidth, boxHeight, RAYWHITE);
-      DrawText("Pular para múltiplo:", boxX + 20, boxY + 10, 20, GRAY);
+      DrawText("Jump to multiple of:", boxX + 20, boxY + 10, 20, GRAY);
       // Efeito de cursor piscando
       const char* cursor = (fmodf(GetTime(), 1.0f) < 0.5f) ? "_" : "";
       DrawText(TextFormat("%s%s", inputBuffer, cursor), boxX + 20, boxY + 40, 30, WHITE);
 
-      DrawText("[Enter] Confirmar [Esc] Cancelar", boxX + 20, boxY + 80, 10, GRAY);
+      DrawText("[Enter] Confirm [Esc] Cancel", boxX + 20, boxY + 80, 10, GRAY);
     }
 
     if (colorPickerVisible == 1) {
-      GuiColorPicker((Rectangle){ window.width - 250, 50, 200, 200 }, "Escolha uma cor", &colors.customStatic);
+      GuiColorPicker((Rectangle){ window.width - 250, 50, 200, 200 }, "Pick a color", &colors.customStatic);
       currentColorMode = COLOR_CUSTOM_STATIC;
     } else if (colorPickerVisible == 2) {
-      GuiColorPicker((Rectangle){ window.width - 250, 50, 200, 200 }, "Escolha uma para o centro", &colors.customGradientCenter);
-      GuiColorPicker((Rectangle){ window.width - 250, 300, 200, 200 }, "Escolha uma para a borda", &colors.customGradientEdge);
+      GuiColorPicker((Rectangle){ window.width - 250, 50, 200, 200 }, "Pick a color for the center", &colors.customGradientCenter);
+      GuiColorPicker((Rectangle){ window.width - 250, 300, 200, 200 }, "Pick a color for the edge", &colors.customGradientEdge);
       currentColorMode = COLOR_CUSTOM_GRADIENT;
     }
     
     // Escreve estatísticas  na tela
     if (showStats) {
       unsigned long long int primoAtual = !currentLimit ? 0 : primes.items[(int)currentLimit-1].p;
-      DrawText(TextFormat("Números gerados: %.0f", currentLimit), 10, 10, 20, WHITE);
-      DrawText(TextFormat("Número atual: %llu", primoAtual), 10, 30, 20, WHITE);
+      DrawText(TextFormat("Numbers rendered: %.0f", currentLimit), 10, 10, 20, WHITE);
+      DrawText(TextFormat("Current number: %llu", primoAtual), 10, 30, 20, WHITE);
       DrawText(TextFormat("PPS: %.2f", primesPerSecond), 10, 50, 20, WHITE);
-      DrawText(TextFormat("Números calculados: %d", primes.count), 10, 70, 20, WHITE);
-      DrawText(TextFormat("Esquema de cores atual: %s", colorSchemeName[currentColorMode]), 10, 90, 20, WHITE);
+      DrawText(TextFormat("Numbers calculated: %d", primes.count), 10, 70, 20, WHITE);
+      DrawText(TextFormat("Color scheme: %s", colorSchemeName[currentColorMode]), 10, 90, 20, WHITE);
       if (divMode == 0) {
-        DrawText("Exibindo números primos", 10, 110, 20, WHITE);
+        DrawText("Rendering prime numbers", 10, 110, 20, WHITE);
       } else {
-        DrawText(TextFormat("Exibindo múltiplos de %d", divMode), 10, 110, 20, WHITE);
+        DrawText(TextFormat("Rendering multiples of %d", divMode), 10, 110, 20, WHITE);
       }
     }
 
     // Escreve os controles na tela
     if (showControls){
-      DrawText("Use o scroll para ajustar o zoom", 10, window.height-30, 20, WHITE);
-      DrawText("WASD para ajustar a câmera", 10, window.height-50, 20, WHITE);
-      DrawText("R para câmera automática (Preencher)", 10, window.height-70, 20, WHITE);
-      DrawText("F para câmera automática (Visão completa)", 10, window.height-90, 20, WHITE);
-      DrawText("Enter para pausar", 10, window.height-110, 20, WHITE);
-      DrawText("C para mudar esquema de cores", 10, window.height-130, 20, WHITE);
-      DrawText("TAB para escolher uma cor", 10, window.height-150, 20, WHITE);
-      DrawText("Use as setas para cima e para baixo para alterar PPS", 10, window.height-170, 20, WHITE);
-      DrawText("P para tirar print", 10, window.height-190, 20, WHITE);
-      DrawText("Setas esquerda e direita para alterar números exibidos", 10, window.height-210, 20, WHITE);
-      DrawText("F1, F2, F3 para esconder os menus", 10, window.height-230, 20, WHITE);
+      DrawText("Scroll wheel to adjust the zoom", 10, window.height-30, 20, WHITE);
+      DrawText("WASD to move the camera", 10, window.height-50, 20, WHITE);
+      DrawText("R for camera mode Fill", 10, window.height-70, 20, WHITE);
+      DrawText("F for camera mode (Full view)", 10, window.height-90, 20, WHITE);
+      DrawText("Enter to pause", 10, window.height-110, 20, WHITE);
+      DrawText("C to change color scheme", 10, window.height-130, 20, WHITE);
+      DrawText("TAB to enter custom color modes", 10, window.height-150, 20, WHITE);
+      DrawText("Arrow keys to change speed", 10, window.height-170, 20, WHITE);
+      DrawText("P to take a screenshot", 10, window.height-190, 20, WHITE);
+      DrawText("Left and right arrows to change number", 10, window.height-210, 20, WHITE);
+      DrawText("[F1-F4] to show/hide UI elements", 10, window.height-230, 20, WHITE);
     }
 
     if (showFPS) DrawFPS(window.width - 100, 10);
 
     // Desenha cursor no centro da tela
-    DrawRectangle(window.centrox-(TAM_BAR_X/2), window.centroy, TAM_BAR_X, BAR_THICKNESS, WHITE);
-    DrawRectangle(window.centrox, window.centroy-(TAM_BAR_Y/2), BAR_THICKNESS, TAM_BAR_Y, WHITE);
+    if (showCursor) {
+      DrawRectangle(window.centrox-(TAM_BAR_X/2), window.centroy, TAM_BAR_X, BAR_THICKNESS, WHITE);
+      DrawRectangle(window.centrox, window.centroy-(TAM_BAR_Y/2), BAR_THICKNESS, TAM_BAR_Y, WHITE);
+    }
 
 		// end the frame and get ready for the next one  (display frame, poll input, etc...)
 		EndDrawing();
@@ -523,12 +519,6 @@ Color processColorMode(ColorMode currentColorMode, PrimePoint currentPrime, Colo
     break;
   case COLOR_BREATHING:
     return globalBreath;
-    break;
-  case COLOR_GRADIENT_PURPLE_TO_RED:
-    return ColorFromHSV(270.f + 90*distanceRatio, 0.7f, 1.0f);
-    break;
-  case COLOR_GRADIENT_TEMPERATURE:
-    return ColorLerp(colors.cold, colors.hot, distanceRatio);
     break;
   default: return WHITE;
   }
